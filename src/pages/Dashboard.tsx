@@ -5,7 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, LogOut, Trash2, Edit2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 
@@ -24,13 +26,52 @@ const Dashboard = () => {
   const { role, isAdmin, isLoading: roleLoading } = useUserRole();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  // Apply filters whenever tasks or filter criteria change
+  useEffect(() => {
+    let result = [...tasks];
+
+    // Search filter
+    if (searchQuery.trim()) {
+      result = result.filter(task =>
+        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(task => task.status === statusFilter);
+    }
+
+    // Priority filter
+    if (priorityFilter !== 'all') {
+      result = result.filter(task => task.priority === priorityFilter);
+    }
+
+    // Sort order
+    result.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+
+    setFilteredTasks(result);
+  }, [tasks, searchQuery, statusFilter, priorityFilter, sortOrder]);
 
   const fetchTasks = async () => {
     try {
@@ -162,6 +203,92 @@ const Dashboard = () => {
           </Button>
         </div>
 
+        {/* Filters Section */}
+        <Card className="mb-6">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-2">
+              <Filter className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Filters & Sort</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search tasks by title or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Priority</label>
+                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Sort By</label>
+                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as 'newest' | 'oldest')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest First</SelectItem>
+                    <SelectItem value="oldest">Oldest First</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {(searchQuery || statusFilter !== 'all' || priorityFilter !== 'all') && (
+              <div className="flex items-center justify-between pt-2 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Showing {filteredTasks.length} of {tasks.length} tasks
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                    setPriorityFilter('all');
+                    setSortOrder('newest');
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -176,9 +303,25 @@ const Dashboard = () => {
               </Button>
             </CardContent>
           </Card>
+        ) : filteredTasks.length === 0 ? (
+          <Card className="text-center py-12">
+            <CardContent>
+              <p className="text-muted-foreground mb-4">No tasks match your filters.</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                  setPriorityFilter('all');
+                }}
+              >
+                Clear Filters
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tasks.map((task) => (
+            {filteredTasks.map((task) => (
               <Card key={task.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">
