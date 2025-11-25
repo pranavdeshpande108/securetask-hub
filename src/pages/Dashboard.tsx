@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun } from 'lucide-react';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 
@@ -20,6 +20,10 @@ interface Task {
   priority: string;
   created_at: string;
   user_id: string;
+  profiles?: {
+    full_name: string | null;
+    email: string;
+  };
 }
 
 const Dashboard = () => {
@@ -79,7 +83,13 @@ const Dashboard = () => {
     try {
       const { data, error } = await supabase
         .from('tasks')
-        .select('*')
+        .select(`
+          *,
+          profiles:user_id (
+            full_name,
+            email
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -216,8 +226,10 @@ const Dashboard = () => {
       <header className="border-b bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold">Task Manager</h1>
-            <Badge variant="outline" className="capitalize">
+            <h1 className="text-2xl font-bold">
+              {isAdmin ? 'Admin Dashboard' : 'Task Manager'}
+            </h1>
+            <Badge variant={isAdmin ? 'default' : 'outline'} className="capitalize">
               {role}
             </Badge>
           </div>
@@ -239,9 +251,11 @@ const Dashboard = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold mb-2">Your Tasks</h2>
+            <h2 className="text-3xl font-bold mb-2">
+              {isAdmin ? 'All Users Tasks' : 'Your Tasks'}
+            </h2>
             <p className="text-muted-foreground">
-              {isAdmin ? 'You can manage all tasks' : 'Manage your personal tasks'}
+              {isAdmin ? 'Manage tasks for all users across the system' : 'Manage your personal tasks'}
             </p>
           </div>
           <Button onClick={() => setDialogOpen(true)}>
@@ -394,13 +408,19 @@ const Dashboard = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex flex-wrap gap-2 mt-2">
                     <Badge variant={getStatusColor(task.status)} className="capitalize">
                       {task.status}
                     </Badge>
                     <Badge variant={getPriorityColor(task.priority)} className="capitalize">
                       {task.priority}
                     </Badge>
+                    {isAdmin && task.profiles && (
+                      <Badge variant="secondary" className="gap-1">
+                        <User className="h-3 w-3" />
+                        {task.profiles.full_name || task.profiles.email}
+                      </Badge>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
