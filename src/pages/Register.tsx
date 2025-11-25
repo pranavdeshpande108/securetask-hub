@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Shield, User } from 'lucide-react';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -13,6 +14,7 @@ const registerSchema = z.object({
   email: z.string().trim().email('Invalid email address').max(255, 'Email must be less than 255 characters'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
+  role: z.enum(['user', 'admin'], { required_error: 'Please select a role' }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -28,6 +30,7 @@ const Register = () => {
     email: '',
     password: '',
     confirmPassword: '',
+    role: 'user',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof RegisterForm, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -55,7 +58,7 @@ const Register = () => {
       registerSchema.parse(formData);
       setIsLoading(true);
       
-      const { error } = await signUp(formData.email, formData.password, formData.fullName);
+      const { error } = await signUp(formData.email, formData.password, formData.fullName, formData.role);
       
       if (!error) {
         navigate('/dashboard');
@@ -146,6 +149,35 @@ const Register = () => {
               />
               {errors.confirmPassword && (
                 <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select 
+                value={formData.role} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, role: value as 'user' | 'admin' }))}
+                disabled={isLoading}
+              >
+                <SelectTrigger id="role" className={errors.role ? 'border-destructive' : ''}>
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      <span>User - Can manage own tasks</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="admin">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      <span>Admin - Can manage all tasks</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.role && (
+                <p className="text-sm text-destructive">{errors.role}</p>
               )}
             </div>
           </CardContent>

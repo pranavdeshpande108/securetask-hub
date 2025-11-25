@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter } from 'lucide-react';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 
@@ -24,6 +25,7 @@ interface Task {
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const { role, isAdmin, isLoading: roleLoading } = useUserRole();
+  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -95,6 +97,8 @@ const Dashboard = () => {
   };
 
   const handleDelete = async (taskId: string) => {
+    const taskToDelete = tasks.find(t => t.id === taskId);
+    
     try {
       const { error } = await supabase
         .from('tasks')
@@ -103,9 +107,49 @@ const Dashboard = () => {
 
       if (error) throw error;
 
+      // Show undo toast
       toast({
-        title: 'Success',
-        description: 'Task deleted successfully',
+        title: 'Task deleted',
+        description: 'Task has been deleted successfully',
+        action: (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              if (taskToDelete) {
+                try {
+                  const { error: restoreError } = await supabase
+                    .from('tasks')
+                    .insert({
+                      id: taskToDelete.id,
+                      title: taskToDelete.title,
+                      description: taskToDelete.description,
+                      status: taskToDelete.status,
+                      priority: taskToDelete.priority,
+                      user_id: taskToDelete.user_id,
+                    });
+
+                  if (restoreError) throw restoreError;
+
+                  toast({
+                    title: 'Task restored',
+                    description: 'Task has been restored successfully',
+                  });
+                  fetchTasks();
+                } catch (error) {
+                  console.error('Error restoring task:', error);
+                  toast({
+                    title: 'Error',
+                    description: 'Failed to restore task',
+                    variant: 'destructive',
+                  });
+                }
+              }
+            }}
+          >
+            Undo
+          </Button>
+        ),
       });
       fetchTasks();
     } catch (error) {
@@ -181,6 +225,9 @@ const Dashboard = () => {
             <span className="text-sm text-muted-foreground hidden sm:inline">
               {user?.email}
             </span>
+            <Button variant="ghost" size="icon" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
             <Button variant="outline" size="sm" onClick={signOut}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout

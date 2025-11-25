@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, ListTodo, Shield, Zap } from 'lucide-react';
+import { CheckCircle2, ListTodo, Shield, Zap, Moon, Sun } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     if (user) {
@@ -22,7 +24,10 @@ const Index = () => {
             <ListTodo className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">TaskFlow</span>
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
             <Button variant="ghost" asChild>
               <Link to="/login">Login</Link>
             </Button>
