@@ -85,7 +85,7 @@ const Dashboard = () => {
         .from('tasks')
         .select(`
           *,
-          profiles:user_id (
+          profiles!tasks_user_id_fkey (
             full_name,
             email
           )
