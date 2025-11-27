@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User } from 'lucide-react';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 
@@ -234,6 +234,12 @@ const Dashboard = () => {
             </Badge>
           </div>
           <div className="flex items-center gap-4">
+            {isAdmin && (
+              <Button variant="outline" size="sm" onClick={() => window.location.href = '/users'}>
+                <Users className="mr-2 h-4 w-4" />
+                Manage Users
+              </Button>
+            )}
             <span className="text-sm text-muted-foreground hidden sm:inline">
               {user?.email}
             </span>
