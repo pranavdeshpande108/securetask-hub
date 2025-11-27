@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Shield, User } from 'lucide-react';
 import { z } from 'zod';
+import { useToast } from '@/hooks/use-toast';
 
 const registerSchema = z.object({
   fullName: z.string().trim().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
@@ -25,6 +27,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 const Register = () => {
   const navigate = useNavigate();
   const { signUp, user } = useAuth();
+  const { toast } = useToast();
   const [formData, setFormData] = useState<RegisterForm>({
     fullName: '',
     email: '',
@@ -32,6 +35,7 @@ const Register = () => {
     confirmPassword: '',
     role: 'user',
   });
+  const [adminPassword, setAdminPassword] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof RegisterForm, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -56,7 +60,47 @@ const Register = () => {
 
     try {
       registerSchema.parse(formData);
-      setIsLoading(true);
+      
+      // Verify admin password if registering as admin
+      if (formData.role === 'admin') {
+        if (!adminPassword) {
+          toast({
+            title: 'Admin Password Required',
+            description: 'Please enter the admin verification password',
+            variant: 'destructive',
+          });
+          return;
+        }
+        
+        setIsLoading(true);
+        
+        try {
+          const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-admin', {
+            body: { password: adminPassword }
+          });
+
+          if (verifyError || !verifyData?.valid) {
+            toast({
+              title: 'Invalid Admin Password',
+              description: 'The admin password you entered is incorrect',
+              variant: 'destructive',
+            });
+            setIsLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error('Admin verification error:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to verify admin password',
+            variant: 'destructive',
+          });
+          setIsLoading(false);
+          return;
+        }
+      } else {
+        setIsLoading(true);
+      }
       
       const { error } = await signUp(formData.email, formData.password, formData.fullName, formData.role);
       
@@ -155,7 +199,12 @@ const Register = () => {
               <Label htmlFor="role">Role</Label>
               <Select 
                 value={formData.role} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, role: value as 'user' | 'admin' }))}
+                onValueChange={(value) => {
+                  setFormData(prev => ({ ...prev, role: value as 'user' | 'admin' }));
+                  if (value === 'user') {
+                    setAdminPassword('');
+                  }
+                }}
                 disabled={isLoading}
               >
                 <SelectTrigger id="role" className={errors.role ? 'border-destructive' : ''}>
@@ -180,6 +229,23 @@ const Register = () => {
                 <p className="text-sm text-destructive">{errors.role}</p>
               )}
             </div>
+
+            {formData.role === 'admin' && (
+              <div className="space-y-2">
+                <Label htmlFor="adminPassword">Admin Verification Password</Label>
+                <Input
+                  id="adminPassword"
+                  type="password"
+                  placeholder="Enter admin verification password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contact your administrator for the admin password
+                </p>
+              </div>
+            )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <Button type="submit" className="w-full" disabled={isLoading}>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -8,9 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users } from 'lucide-react';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
+import { TaskAssignmentDialog } from '@/components/TaskAssignmentDialog';
+import { Progress } from '@/components/ui/progress';
 
 interface Task {
   id: string;
@@ -27,6 +30,7 @@ interface Task {
 }
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { role, isAdmin, isLoading: roleLoading } = useUserRole();
   const { theme, toggleTheme } = useTheme();
@@ -35,7 +39,9 @@ const Dashboard = () => {
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [userStats, setUserStats] = useState<Map<string, { total: number; completed: number }>>(new Map());
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,6 +100,23 @@ const Dashboard = () => {
 
       if (error) throw error;
       setTasks(data || []);
+      
+      // Calculate user stats for admin
+      if (isAdmin && data) {
+        const stats = new Map<string, { total: number; completed: number }>();
+        data.forEach(task => {
+          const userId = task.user_id;
+          if (!stats.has(userId)) {
+            stats.set(userId, { total: 0, completed: 0 });
+          }
+          const userStat = stats.get(userId)!;
+          userStat.total++;
+          if (task.status === 'completed') {
+            userStat.completed++;
+          }
+        });
+        setUserStats(stats);
+      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast({
@@ -221,10 +244,28 @@ const Dashboard = () => {
     );
   }
 
+  const getCompletionRate = (userId: string) => {
+    const stats = userStats.get(userId);
+    if (!stats || stats.total === 0) return 0;
+    return Math.round((stats.completed / stats.total) * 100);
+  };
+
+  // Group tasks by user for admin view
+  const tasksByUser = isAdmin
+    ? tasks.reduce((acc, task) => {
+        const userName = task.profiles?.full_name || task.profiles?.email || 'Unknown User';
+        if (!acc[userName]) {
+          acc[userName] = { tasks: [], userId: task.user_id };
+        }
+        acc[userName].tasks.push(task);
+        return acc;
+      }, {} as Record<string, { tasks: Task[]; userId: string }>)
+    : {};
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <header className="border-b bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <h1 className="text-2xl font-bold">
               {isAdmin ? 'Admin Dashboard' : 'Task Manager'}
@@ -233,14 +274,22 @@ const Dashboard = () => {
               {role}
             </Badge>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             {isAdmin && (
-              <Button variant="outline" size="sm" onClick={() => window.location.href = '/users'}>
-                <Users className="mr-2 h-4 w-4" />
-                Manage Users
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => navigate('/user-management')}>
+                  <Users className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Manage Users</span>
+                  <span className="sm:hidden">Users</span>
+                </Button>
+                <Button variant="default" size="sm" onClick={() => setAssignDialogOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Assign Task</span>
+                  <span className="sm:hidden">Assign</span>
+                </Button>
+              </>
             )}
-            <span className="text-sm text-muted-foreground hidden sm:inline">
+            <span className="text-sm text-muted-foreground hidden md:inline">
               {user?.email}
             </span>
             <Button variant="ghost" size="icon" onClick={toggleTheme}>
@@ -448,6 +497,12 @@ const Dashboard = () => {
         onOpenChange={handleDialogClose}
         onTaskSaved={handleTaskSaved}
         task={editingTask}
+      />
+
+      <TaskAssignmentDialog
+        open={assignDialogOpen}
+        onOpenChange={setAssignDialogOpen}
+        onSuccess={fetchTasks}
       />
     </div>
   );

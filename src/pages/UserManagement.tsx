@@ -8,8 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Users, Shield, User, ArrowLeft, Moon, Sun, LogOut } from 'lucide-react';
+import { Loader2, Users, Shield, User, ArrowLeft, Moon, Sun, LogOut, Trash2, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface UserProfile {
   id: string;
@@ -146,6 +157,57 @@ const UserManagement = () => {
     return user.user_roles[0].role;
   };
 
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (userId === user?.id) {
+      toast({
+        title: 'Cannot delete yourself',
+        description: 'You cannot delete your own account',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Delete user's tasks first
+      const { error: tasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', userId);
+
+      if (tasksError) throw tasksError;
+
+      // Delete user's role
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId);
+
+      if (roleError) throw roleError;
+
+      // Delete user's profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) throw profileError;
+
+      toast({
+        title: 'User deleted',
+        description: `${userEmail} has been removed from the system`,
+      });
+
+      fetchUsers();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete user',
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (roleLoading || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -205,7 +267,7 @@ const UserManagement = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             {users.map((userProfile) => {
               const role = getUserRole(userProfile);
               const taskCount = userProfile.tasks?.length || 0;
@@ -268,6 +330,34 @@ const UserManagement = () => {
                     <div className="text-xs text-muted-foreground">
                       Joined {new Date(userProfile.created_at).toLocaleDateString()}
                     </div>
+
+                    {userProfile.id !== user?.id && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm" className="w-full mt-2">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete User
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete {userProfile.email} and all their tasks. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteUser(userProfile.id, userProfile.email)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </CardContent>
                 </Card>
               );
