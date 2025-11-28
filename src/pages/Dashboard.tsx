@@ -9,11 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, TrendingUp } from 'lucide-react';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, TrendingUp, LayoutGrid, List } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 import { TaskAssignmentDialog } from '@/components/TaskAssignmentDialog';
 import { Progress } from '@/components/ui/progress';
+import { UserKanbanBoard } from '@/components/UserKanbanBoard';
+import { CompletionRateCard } from '@/components/CompletionRateCard';
 
 interface Task {
   id: string;
@@ -43,6 +45,7 @@ const Dashboard = () => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [userStats, setUserStats] = useState<Map<string, { total: number; completed: number }>>(new Map());
   const [adminViewMode, setAdminViewMode] = useState<'self' | 'all'>('all');
+  const [adminLayoutMode, setAdminLayoutMode] = useState<'kanban' | 'grid'>('kanban');
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -319,10 +322,36 @@ const Dashboard = () => {
               {isAdmin ? 'Manage tasks for all users across the system' : 'Manage your personal tasks'}
             </p>
           </div>
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Task
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <div className="inline-flex rounded-md border border-border bg-card p-1">
+                <Button
+                  type="button"
+                  variant={adminLayoutMode === 'kanban' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="px-3 py-1"
+                  onClick={() => setAdminLayoutMode('kanban')}
+                >
+                  <LayoutGrid className="mr-2 h-4 w-4" />
+                  Kanban
+                </Button>
+                <Button
+                  type="button"
+                  variant={adminLayoutMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="px-3 py-1"
+                  onClick={() => setAdminLayoutMode('grid')}
+                >
+                  <List className="mr-2 h-4 w-4" />
+                  List
+                </Button>
+              </div>
+            )}
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Task
+            </Button>
+          </div>
         </div>
 
         {/* Filters Section */}
@@ -447,76 +476,129 @@ const Dashboard = () => {
               </Button>
             </CardContent>
           </Card>
-        ) : filteredTasks.length === 0 ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <p className="text-muted-foreground mb-4">No tasks match your filters.</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('all');
-                  setPriorityFilter('all');
-                }}
-              >
-                Clear Filters
-              </Button>
-            </CardContent>
-          </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredTasks.map((task) => (
-              <Card key={task.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="text-lg">{task.title}</CardTitle>
-                    <div className="flex gap-2">
-                      {(isAdmin || task.user_id === user?.id) && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(task)}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(task.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    <Badge variant={getStatusColor(task.status)} className="capitalize">
-                      {task.status}
-                    </Badge>
-                    <Badge variant={getPriorityColor(task.priority)} className="capitalize">
-                      {task.priority}
-                    </Badge>
-                    {isAdmin && task.profiles && (
-                      <Badge variant="secondary" className="gap-1">
-                        <User className="h-3 w-3" />
-                        {task.profiles.full_name || task.profiles.email}
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
+          <>
+            {isAdmin && adminLayoutMode === 'kanban' && Object.keys(tasksByUser).length > 0 ? (
+              <div className="space-y-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <h3 className="text-xl font-semibold">User Task Boards</h3>
+                  <Badge variant="secondary" className="ml-2">
+                    {Object.keys(tasksByUser).length} {Object.keys(tasksByUser).length === 1 ? 'user' : 'users'}
+                  </Badge>
+                </div>
+                {Object.entries(tasksByUser).map(([userName, { tasks: userTasks, userId }]) => (
+                  <UserKanbanBoard
+                    key={userId}
+                    userName={userName}
+                    userId={userId}
+                    tasks={userTasks}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    isAdmin={isAdmin}
+                    currentUserId={user?.id}
+                  />
+                ))}
+              </div>
+            ) : isAdmin && adminLayoutMode === 'grid' && Object.keys(tasksByUser).length > 0 ? (
+              <div className="space-y-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <h3 className="text-xl font-semibold">User Completion Overview</h3>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {Object.entries(tasksByUser).map(([userName, { tasks: userTasks, userId }]) => {
+                    const total = userTasks.length;
+                    const completed = userTasks.filter(t => t.status === 'completed').length;
+                    const inProgress = userTasks.filter(t => t.status === 'in-progress' || t.status === 'in_progress').length;
+                    const pending = userTasks.filter(t => t.status === 'pending').length;
+
+                    return (
+                      <CompletionRateCard
+                        key={userId}
+                        userName={userName}
+                        userId={userId}
+                        totalTasks={total}
+                        completedTasks={completed}
+                        inProgressTasks={inProgress}
+                        pendingTasks={pending}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <Card className="text-center py-12">
                 <CardContent>
-                  <CardDescription className="line-clamp-3">
-                    {task.description || 'No description'}
-                  </CardDescription>
-                  <p className="text-xs text-muted-foreground mt-4">
-                    Created {new Date(task.created_at).toLocaleDateString()}
-                  </p>
+                  <p className="text-muted-foreground mb-4">No tasks match your filters.</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      setPriorityFilter('all');
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredTasks.map((task) => (
+                  <Card key={task.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-lg">{task.title}</CardTitle>
+                        <div className="flex gap-2">
+                          {(isAdmin || task.user_id === user?.id) && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(task)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(task.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Badge variant={getStatusColor(task.status)} className="capitalize">
+                          {task.status}
+                        </Badge>
+                        <Badge variant={getPriorityColor(task.priority)} className="capitalize">
+                          {task.priority}
+                        </Badge>
+                        {isAdmin && task.profiles && (
+                          <Badge variant="secondary" className="gap-1">
+                            <User className="h-3 w-3" />
+                            {task.profiles.full_name || task.profiles.email}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <CardDescription className="line-clamp-3">
+                        {task.description || 'No description'}
+                      </CardDescription>
+                      <p className="text-xs text-muted-foreground mt-4">
+                        Created {new Date(task.created_at).toLocaleDateString()}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
 
