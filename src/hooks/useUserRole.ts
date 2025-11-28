@@ -20,10 +20,18 @@ export const useUserRole = () => {
           .from('user_roles')
           .select('role')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
-        if (error) throw error;
-        setRole(data?.role as 'user' | 'admin');
+        if (error) {
+          // If there is simply no role row yet, treat as regular user without crashing
+          if ((error as any).code === 'PGRST116') {
+            setRole('user');
+          } else {
+            throw error;
+          }
+        } else {
+          setRole((data?.role as 'user' | 'admin') ?? 'user');
+        }
       } catch (error) {
         console.error('Error fetching user role:', error);
         setRole('user'); // Default to user if there's an error
