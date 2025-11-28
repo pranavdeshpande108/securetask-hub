@@ -42,6 +42,7 @@ const Dashboard = () => {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [userStats, setUserStats] = useState<Map<string, { total: number; completed: number }>>(new Map());
+  const [adminViewMode, setAdminViewMode] = useState<'self' | 'all'>('all');
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,6 +57,11 @@ const Dashboard = () => {
   // Apply filters whenever tasks or filter criteria change
   useEffect(() => {
     let result = [...tasks];
+
+    // For admins, allow toggling between their own tasks and all users' tasks
+    if (isAdmin && adminViewMode === 'self' && user) {
+      result = result.filter(task => task.user_id === user.id);
+    }
 
     // Search filter
     if (searchQuery.trim()) {
@@ -83,7 +89,7 @@ const Dashboard = () => {
     });
 
     setFilteredTasks(result);
-  }, [tasks, searchQuery, statusFilter, priorityFilter, sortOrder]);
+  }, [tasks, searchQuery, statusFilter, priorityFilter, sortOrder, isAdmin, adminViewMode, user]);
 
   const fetchTasks = async () => {
     try {
@@ -321,11 +327,33 @@ const Dashboard = () => {
 
         {/* Filters Section */}
         <Card className="mb-6">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Filter className="h-5 w-5 text-primary" />
               <CardTitle className="text-lg">Filters & Sort</CardTitle>
             </div>
+            {isAdmin && (
+              <div className="inline-flex rounded-md border border-border bg-card/80 p-1 text-xs sm:text-sm">
+                <Button
+                  type="button"
+                  variant={adminViewMode === 'self' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="px-3 py-1"
+                  onClick={() => setAdminViewMode('self')}
+                >
+                  My tasks
+                </Button>
+                <Button
+                  type="button"
+                  variant={adminViewMode === 'all' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="px-3 py-1"
+                  onClick={() => setAdminViewMode('all')}
+                >
+                  All users
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative">
