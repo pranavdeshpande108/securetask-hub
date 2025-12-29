@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Edit2, Trash2, Clock, CheckCircle2, Circle, PlayCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +22,7 @@ interface UserKanbanBoardProps {
   tasks: Task[];
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
+  onStatusChange: (taskId: string, newStatus: string) => void;
   isAdmin: boolean;
   currentUserId?: string;
 }
@@ -31,6 +33,7 @@ export const UserKanbanBoard = ({
   tasks,
   onEdit,
   onDelete,
+  onStatusChange,
   isAdmin,
   currentUserId,
 }: UserKanbanBoardProps) => {
@@ -134,14 +137,29 @@ export const UserKanbanBoard = ({
                   <Badge variant={getPriorityColor(task.priority)} className="text-xs capitalize">
                     {task.priority}
                   </Badge>
-                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {new Date(task.created_at).toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric' 
-                    })}
-                  </span>
+                  {(isAdmin || task.user_id === currentUserId) && (
+                    <Select
+                      value={task.status}
+                      onValueChange={(value) => onStatusChange(task.id, value)}
+                    >
+                      <SelectTrigger className="h-6 w-24 text-[10px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1">
+                  <Clock className="h-3 w-3" />
+                  {new Date(task.created_at).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}
+                </span>
               </CardContent>
             </Card>
           ))
