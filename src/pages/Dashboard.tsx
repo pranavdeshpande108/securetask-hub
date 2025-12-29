@@ -219,6 +219,30 @@ const Dashboard = () => {
     handleDialogClose();
   };
 
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Status updated',
+        description: `Task status changed to ${newStatus}`,
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update task status',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high':
@@ -347,10 +371,23 @@ const Dashboard = () => {
                 </Button>
               </div>
             )}
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Task
-            </Button>
+            {isAdmin ? (
+              <div className="flex gap-2">
+                <Button onClick={() => setDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  For Myself
+                </Button>
+                <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  For Users
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Task
+              </Button>
+            )}
           </div>
         </div>
 
@@ -495,6 +532,7 @@ const Dashboard = () => {
                     tasks={userTasks}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onStatusChange={handleStatusChange}
                     isAdmin={isAdmin}
                     currentUserId={user?.id}
                   />
@@ -572,9 +610,25 @@ const Dashboard = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        <Badge variant={getStatusColor(task.status)} className="capitalize">
-                          {task.status}
-                        </Badge>
+                        {(isAdmin || task.user_id === user?.id) ? (
+                          <Select
+                            value={task.status}
+                            onValueChange={(value) => handleStatusChange(task.id, value)}
+                          >
+                            <SelectTrigger className="h-7 w-28 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="in-progress">In Progress</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant={getStatusColor(task.status)} className="capitalize">
+                            {task.status}
+                          </Badge>
+                        )}
                         <Badge variant={getPriorityColor(task.priority)} className="capitalize">
                           {task.priority}
                         </Badge>

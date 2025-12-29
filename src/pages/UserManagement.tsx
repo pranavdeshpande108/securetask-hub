@@ -112,29 +112,15 @@ const UserManagement = () => {
 
   const handleRoleChange = async (userId: string, newRole: 'user' | 'admin') => {
     try {
-      // Check if user already has a role
-      const { data: existingRole } = await supabase
+      // Use upsert to handle both insert and update cases
+      const { error } = await supabase
         .from('user_roles')
-        .select('id')
-        .eq('user_id', userId)
-        .single();
+        .upsert(
+          { user_id: userId, role: newRole },
+          { onConflict: 'user_id' }
+        );
 
-      if (existingRole) {
-        // Update existing role
-        const { error } = await supabase
-          .from('user_roles')
-          .update({ role: newRole })
-          .eq('user_id', userId);
-
-        if (error) throw error;
-      } else {
-        // Insert new role
-        const { error } = await supabase
-          .from('user_roles')
-          .insert({ user_id: userId, role: newRole });
-
-        if (error) throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: 'Role updated',
