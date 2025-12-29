@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Lock } from 'lucide-react';
 
 interface UserProfile {
   id: string;
@@ -32,6 +33,7 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
     description: '',
     priority: 'medium',
     status: 'pending',
+    is_private: false,
   });
 
   useEffect(() => {
@@ -96,7 +98,7 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
           : 'Task assigned to selected user',
       });
 
-      setFormData({ title: '', description: '', priority: 'medium', status: 'pending' });
+      setFormData({ title: '', description: '', priority: 'medium', status: 'pending', is_private: false });
       setSelectedUserId('');
       onSuccess();
       onOpenChange(false);
@@ -203,6 +205,20 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Private Task Toggle */}
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="is_private_assign"
+              checked={formData.is_private}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_private: checked === true })}
+              disabled={isLoading}
+            />
+            <Label htmlFor="is_private_assign" className="flex items-center gap-2 cursor-pointer">
+              <Lock className="h-4 w-4" />
+              Private Task (only visible to assigned user)
+            </Label>
           </div>
 
           <div className="flex gap-2 pt-4">

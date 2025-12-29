@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -16,6 +17,7 @@ const taskSchema = z.object({
   description: z.string().trim().max(1000, 'Description must be less than 1000 characters').optional(),
   status: z.enum(['pending', 'in-progress', 'completed']),
   priority: z.enum(['low', 'medium', 'high']),
+  is_private: z.boolean(),
 });
 
 type TaskForm = z.infer<typeof taskSchema>;
@@ -26,6 +28,7 @@ interface Task {
   description: string | null;
   status: string;
   priority: string;
+  is_private?: boolean;
 }
 
 interface TaskDialogProps {
@@ -43,6 +46,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
     description: '',
     status: 'pending',
     priority: 'medium',
+    is_private: false,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof TaskForm, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -54,6 +58,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
         description: task.description || '',
         status: task.status as TaskForm['status'],
         priority: task.priority as TaskForm['priority'],
+        is_private: task.is_private || false,
       });
     } else {
       setFormData({
@@ -61,6 +66,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
         description: '',
         status: 'pending',
         priority: 'medium',
+        is_private: false,
       });
     }
     setErrors({});
@@ -90,6 +96,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
             description: formData.description || null,
             status: formData.status,
             priority: formData.priority,
+            is_private: formData.is_private,
           })
           .eq('id', task.id);
 
@@ -108,6 +115,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
             description: formData.description || null,
             status: formData.status,
             priority: formData.priority,
+            is_private: formData.is_private,
             user_id: user!.id,
           });
 
@@ -216,8 +224,22 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
                     <SelectItem value="high">High</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
             </div>
+
+            {/* Private Task Toggle */}
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox
+                id="is_private"
+                checked={formData.is_private}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_private: checked === true }))}
+                disabled={isLoading}
+              />
+              <Label htmlFor="is_private" className="flex items-center gap-2 cursor-pointer">
+                <Lock className="h-4 w-4" />
+                Private Task (only visible to you)
+              </Label>
+            </div>
+          </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
