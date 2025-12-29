@@ -9,13 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, TrendingUp, LayoutGrid, List } from 'lucide-react';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, List, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 import { TaskAssignmentDialog } from '@/components/TaskAssignmentDialog';
-import { Progress } from '@/components/ui/progress';
-import { UserKanbanBoard } from '@/components/UserKanbanBoard';
-import { CompletionRateCard } from '@/components/CompletionRateCard';
+import { UserListView } from '@/components/UserListView';
+import { UserPerformanceView } from '@/components/UserPerformanceView';
 
 interface Task {
   id: string;
@@ -25,10 +24,18 @@ interface Task {
   priority: string;
   created_at: string;
   user_id: string;
+  is_private?: boolean;
   profiles?: {
     full_name: string | null;
     email: string;
   };
+}
+
+interface SelectedUser {
+  userName: string;
+  userEmail: string;
+  userId: string;
+  tasks: Task[];
 }
 
 const Dashboard = () => {
@@ -43,9 +50,9 @@ const Dashboard = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [userStats, setUserStats] = useState<Map<string, { total: number; completed: number }>>(new Map());
   const [adminViewMode, setAdminViewMode] = useState<'self' | 'all'>('all');
-  const [adminLayoutMode, setAdminLayoutMode] = useState<'kanban' | 'grid'>('kanban');
+  const [showUserList, setShowUserList] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SelectedUser | null>(null);
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -109,23 +116,6 @@ const Dashboard = () => {
 
       if (error) throw error;
       setTasks(data || []);
-      
-      // Calculate user stats for admin
-      if (isAdmin && data) {
-        const stats = new Map<string, { total: number; completed: number }>();
-        data.forEach(task => {
-          const userId = task.user_id;
-          if (!stats.has(userId)) {
-            stats.set(userId, { total: 0, completed: 0 });
-          }
-          const userStat = stats.get(userId)!;
-          userStat.total++;
-          if (task.status === 'completed') {
-            userStat.completed++;
-          }
-        });
-        setUserStats(stats);
-      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast({
@@ -277,23 +267,18 @@ const Dashboard = () => {
     );
   }
 
-  const getCompletionRate = (userId: string) => {
-    const stats = userStats.get(userId);
-    if (!stats || stats.total === 0) return 0;
-    return Math.round((stats.completed / stats.total) * 100);
-  };
-
   // Group tasks by user for admin view
-  const tasksByUser = isAdmin
-    ? tasks.reduce((acc, task) => {
+  const usersData = isAdmin
+    ? Object.values(tasks.reduce((acc, task) => {
         const userName = task.profiles?.full_name || task.profiles?.email || 'Unknown User';
-        if (!acc[userName]) {
-          acc[userName] = { tasks: [], userId: task.user_id };
+        const userEmail = task.profiles?.email || '';
+        if (!acc[task.user_id]) {
+          acc[task.user_id] = { userName, userEmail, userId: task.user_id, tasks: [] };
         }
-        acc[userName].tasks.push(task);
+        acc[task.user_id].tasks.push(task);
         return acc;
-      }, {} as Record<string, { tasks: Task[]; userId: string }>)
-    : {};
+      }, {} as Record<string, SelectedUser>))
+    : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -348,28 +333,14 @@ const Dashboard = () => {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <div className="inline-flex rounded-md border border-border bg-card p-1">
-                <Button
-                  type="button"
-                  variant={adminLayoutMode === 'kanban' ? 'default' : 'ghost'}
-                  size="sm"
-                  className="px-3 py-1"
-                  onClick={() => setAdminLayoutMode('kanban')}
-                >
-                  <LayoutGrid className="mr-2 h-4 w-4" />
-                  Kanban
-                </Button>
-                <Button
-                  type="button"
-                  variant={adminLayoutMode === 'grid' ? 'default' : 'ghost'}
-                  size="sm"
-                  className="px-3 py-1"
-                  onClick={() => setAdminLayoutMode('grid')}
-                >
-                  <List className="mr-2 h-4 w-4" />
-                  List
-                </Button>
-              </div>
+              <Button
+                variant={showUserList ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => { setShowUserList(!showUserList); setSelectedUser(null); }}
+              >
+                <List className="mr-2 h-4 w-4" />
+                {showUserList ? 'Hide Users' : 'View Users'}
+              </Button>
             )}
             {isAdmin ? (
               <div className="flex gap-2">
@@ -391,118 +362,118 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Filters Section */}
-        <Card className="mb-6">
-          <CardHeader className="pb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Filter className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Filters & Sort</CardTitle>
-            </div>
-            {isAdmin && (
-              <div className="inline-flex rounded-md border border-border bg-card/80 p-1 text-xs sm:text-sm">
-                <Button
-                  type="button"
-                  variant={adminViewMode === 'self' ? 'default' : 'ghost'}
-                  size="sm"
-                  className="px-3 py-1"
-                  onClick={() => setAdminViewMode('self')}
-                >
-                  My tasks
-                </Button>
-                <Button
-                  type="button"
-                  variant={adminViewMode === 'all' ? 'default' : 'ghost'}
-                  size="sm"
-                  className="px-3 py-1"
-                  onClick={() => setAdminViewMode('all')}
-                >
-                  All users
-                </Button>
+        {/* Filters Section - Only show when not in user detail view */}
+        {!selectedUser && (
+          <Card className="mb-6">
+            <CardHeader className="pb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <Filter className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Filters & Sort</CardTitle>
               </div>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tasks by title or description..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Status</label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+              {isAdmin && (
+                <div className="inline-flex rounded-md border border-border bg-card/80 p-1 text-xs sm:text-sm">
+                  <Button
+                    type="button"
+                    variant={adminViewMode === 'self' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="px-3 py-1"
+                    onClick={() => setAdminViewMode('self')}
+                  >
+                    My tasks
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={adminViewMode === 'all' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="px-3 py-1"
+                    onClick={() => setAdminViewMode('all')}
+                  >
+                    All users
+                  </Button>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tasks by title or description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
               </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Status</label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Priority</label>
-                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Priorities</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Priority</label>
+                  <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Priorities</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Sort By</label>
-                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as 'newest' | 'oldest')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="newest">Newest First</SelectItem>
-                    <SelectItem value="oldest">Oldest First</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Sort By</label>
+                  <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as 'newest' | 'oldest')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest First</SelectItem>
+                      <SelectItem value="oldest">Oldest First</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-
-            {(searchQuery || statusFilter !== 'all' || priorityFilter !== 'all') && (
-              <div className="flex items-center justify-between pt-2 border-t">
-                <p className="text-sm text-muted-foreground">
-                  Showing {filteredTasks.length} of {tasks.length} tasks
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                    setPriorityFilter('all');
-                    setSortOrder('newest');
-                  }}
-                >
-                  Clear Filters
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
+        ) : selectedUser ? (
+          <UserPerformanceView
+            userName={selectedUser.userName}
+            userEmail={selectedUser.userEmail}
+            userId={selectedUser.userId}
+            tasks={selectedUser.tasks}
+            onBack={() => setSelectedUser(null)}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
+            isAdmin={isAdmin}
+            currentUserId={user?.id}
+          />
+        ) : isAdmin && showUserList ? (
+          <UserListView
+            users={usersData}
+            onUserClick={(userData) => setSelectedUser(userData)}
+          />
         ) : tasks.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
@@ -513,59 +484,7 @@ const Dashboard = () => {
               </Button>
             </CardContent>
           </Card>
-        ) : (
-          <>
-            {isAdmin && adminLayoutMode === 'kanban' && Object.keys(tasksByUser).length > 0 ? (
-              <div className="space-y-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                  <h3 className="text-xl font-semibold">User Task Boards</h3>
-                  <Badge variant="secondary" className="ml-2">
-                    {Object.keys(tasksByUser).length} {Object.keys(tasksByUser).length === 1 ? 'user' : 'users'}
-                  </Badge>
-                </div>
-                {Object.entries(tasksByUser).map(([userName, { tasks: userTasks, userId }]) => (
-                  <UserKanbanBoard
-                    key={userId}
-                    userName={userName}
-                    userId={userId}
-                    tasks={userTasks}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    onStatusChange={handleStatusChange}
-                    isAdmin={isAdmin}
-                    currentUserId={user?.id}
-                  />
-                ))}
-              </div>
-            ) : isAdmin && adminLayoutMode === 'grid' && Object.keys(tasksByUser).length > 0 ? (
-              <div className="space-y-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                  <h3 className="text-xl font-semibold">User Completion Overview</h3>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {Object.entries(tasksByUser).map(([userName, { tasks: userTasks, userId }]) => {
-                    const total = userTasks.length;
-                    const completed = userTasks.filter(t => t.status === 'completed').length;
-                    const inProgress = userTasks.filter(t => t.status === 'in-progress' || t.status === 'in_progress').length;
-                    const pending = userTasks.filter(t => t.status === 'pending').length;
-
-                    return (
-                      <CompletionRateCard
-                        key={userId}
-                        userName={userName}
-                        userId={userId}
-                        totalTasks={total}
-                        completedTasks={completed}
-                        inProgressTasks={inProgress}
-                        pendingTasks={pending}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ) : filteredTasks.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
               <Card className="text-center py-12">
                 <CardContent>
                   <p className="text-muted-foreground mb-4">No tasks match your filters.</p>
