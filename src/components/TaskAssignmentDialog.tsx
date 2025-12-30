@@ -6,10 +6,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2, Lock, CalendarIcon } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface UserProfile {
   id: string;
@@ -36,6 +40,7 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
     priority: 'medium',
     status: 'pending',
     is_private: false,
+    deadline: null as Date | null,
   });
 
   useEffect(() => {
@@ -83,7 +88,12 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
         : [selectedUserId];
 
       const tasks = targetUserIds.map(userId => ({
-        ...formData,
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        status: formData.status,
+        is_private: formData.is_private,
+        deadline: formData.deadline?.toISOString() || null,
         user_id: userId,
       }));
 
@@ -113,7 +123,7 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
           : 'Task assigned to selected user',
       });
 
-      setFormData({ title: '', description: '', priority: 'medium', status: 'pending', is_private: false });
+      setFormData({ title: '', description: '', priority: 'medium', status: 'pending', is_private: false, deadline: null });
       setSelectedUserId('');
       onSuccess();
       onOpenChange(false);
@@ -220,6 +230,63 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Deadline Picker */}
+          <div className="space-y-2">
+            <Label>Deadline (Optional)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !formData.deadline && "text-muted-foreground"
+                  )}
+                  disabled={isLoading}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {formData.deadline ? format(formData.deadline, "PPP p") : <span>Pick a deadline</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={formData.deadline || undefined}
+                  onSelect={(date) => setFormData({ ...formData, deadline: date || null })}
+                  disabled={(date) => date < new Date()}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+                <div className="p-3 border-t">
+                  <Label className="text-sm">Time</Label>
+                  <Input
+                    type="time"
+                    value={formData.deadline ? format(formData.deadline, "HH:mm") : ""}
+                    onChange={(e) => {
+                      if (formData.deadline && e.target.value) {
+                        const [hours, minutes] = e.target.value.split(':');
+                        const newDate = new Date(formData.deadline);
+                        newDate.setHours(parseInt(hours), parseInt(minutes));
+                        setFormData({ ...formData, deadline: newDate });
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+            {formData.deadline && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setFormData({ ...formData, deadline: null })}
+                className="text-muted-foreground"
+              >
+                Clear deadline
+              </Button>
+            )}
           </div>
 
           {/* Private Task Toggle */}

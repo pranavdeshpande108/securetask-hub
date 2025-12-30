@@ -92,10 +92,12 @@ export type Database = {
       tasks: {
         Row: {
           created_at: string
+          deadline: string | null
           description: string | null
           id: string
           is_private: boolean
           priority: string
+          reminder_sent: boolean
           status: string
           title: string
           updated_at: string
@@ -103,10 +105,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deadline?: string | null
           description?: string | null
           id?: string
           is_private?: boolean
           priority?: string
+          reminder_sent?: boolean
           status?: string
           title: string
           updated_at?: string
@@ -114,10 +118,12 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deadline?: string | null
           description?: string | null
           id?: string
           is_private?: boolean
           priority?: string
+          reminder_sent?: boolean
           status?: string
           title?: string
           updated_at?: string
