@@ -485,93 +485,91 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         ) : filteredTasks.length === 0 ? (
-              <Card className="text-center py-12">
+          <Card className="text-center py-12">
+            <CardContent>
+              <p className="text-muted-foreground mb-4">No tasks match your filters.</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                  setPriorityFilter('all');
+                }}
+              >
+                Clear Filters
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredTasks.map((task) => (
+              <Card key={task.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="text-lg">{task.title}</CardTitle>
+                    <div className="flex gap-2">
+                      {(isAdmin || task.user_id === user?.id) && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(task)}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(task.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {(isAdmin || task.user_id === user?.id) ? (
+                      <Select
+                        value={task.status}
+                        onValueChange={(value) => handleStatusChange(task.id, value)}
+                      >
+                        <SelectTrigger className="h-7 w-28 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="in-progress">In Progress</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge variant={getStatusColor(task.status)} className="capitalize">
+                        {task.status}
+                      </Badge>
+                    )}
+                    <Badge variant={getPriorityColor(task.priority)} className="capitalize">
+                      {task.priority}
+                    </Badge>
+                    {isAdmin && task.profiles && (
+                      <Badge variant="secondary" className="gap-1">
+                        <User className="h-3 w-3" />
+                        {task.profiles.full_name || task.profiles.email}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground mb-4">No tasks match your filters.</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setStatusFilter('all');
-                      setPriorityFilter('all');
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
+                  <CardDescription className="line-clamp-3">
+                    {task.description || 'No description'}
+                  </CardDescription>
+                  <p className="text-xs text-muted-foreground mt-4">
+                    Created {new Date(task.created_at).toLocaleDateString()}
+                  </p>
                 </CardContent>
               </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredTasks.map((task) => (
-                  <Card key={task.id} className="hover:shadow-lg transition-shadow">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <CardTitle className="text-lg">{task.title}</CardTitle>
-                        <div className="flex gap-2">
-                          {(isAdmin || task.user_id === user?.id) && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(task)}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(task.id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {(isAdmin || task.user_id === user?.id) ? (
-                          <Select
-                            value={task.status}
-                            onValueChange={(value) => handleStatusChange(task.id, value)}
-                          >
-                            <SelectTrigger className="h-7 w-28 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="in-progress">In Progress</SelectItem>
-                              <SelectItem value="completed">Completed</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Badge variant={getStatusColor(task.status)} className="capitalize">
-                            {task.status}
-                          </Badge>
-                        )}
-                        <Badge variant={getPriorityColor(task.priority)} className="capitalize">
-                          {task.priority}
-                        </Badge>
-                        {isAdmin && task.profiles && (
-                          <Badge variant="secondary" className="gap-1">
-                            <User className="h-3 w-3" />
-                            {task.profiles.full_name || task.profiles.email}
-                          </Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription className="line-clamp-3">
-                        {task.description || 'No description'}
-                      </CardDescription>
-                      <p className="text-xs text-muted-foreground mt-4">
-                        Created {new Date(task.created_at).toLocaleDateString()}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
       </main>
 
