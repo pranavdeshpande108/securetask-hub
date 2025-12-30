@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from '@/hooks/useNotifications';
 import { z } from 'zod';
 
 const taskSchema = z.object({
@@ -41,6 +42,7 @@ interface TaskDialogProps {
 export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { createNotification } = useNotifications();
   const [formData, setFormData] = useState<TaskForm>({
     title: '',
     description: '',
@@ -108,7 +110,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
         });
       } else {
         // Create new task
-        const { error } = await supabase
+        const { data: insertedTask, error } = await supabase
           .from('tasks')
           .insert({
             title: formData.title,
@@ -117,9 +119,20 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
             priority: formData.priority,
             is_private: formData.is_private,
             user_id: user!.id,
-          });
+          })
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Create self-notification for task creation
+        await createNotification(
+          user!.id,
+          'Task Created',
+          `Your task "${formData.title}" has been created successfully`,
+          'task_created',
+          insertedTask?.id
+        );
 
         toast({
           title: 'Success',

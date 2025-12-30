@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Lock } from 'lucide-react';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface UserProfile {
   id: string;
@@ -24,6 +25,7 @@ interface TaskAssignmentDialogProps {
 
 export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssignmentDialogProps) => {
   const { toast } = useToast();
+  const { createNotification } = useNotifications();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [assignmentType, setAssignmentType] = useState<'single' | 'all'>('single');
@@ -85,11 +87,24 @@ export const TaskAssignmentDialog = ({ open, onOpenChange, onSuccess }: TaskAssi
         user_id: userId,
       }));
 
-      const { error } = await supabase
+      const { data: insertedTasks, error } = await supabase
         .from('tasks')
-        .insert(tasks);
+        .insert(tasks)
+        .select();
 
       if (error) throw error;
+
+      // Create notifications for assigned users
+      for (const userId of targetUserIds) {
+        const taskId = insertedTasks?.find(t => t.user_id === userId)?.id;
+        await createNotification(
+          userId,
+          'New Task Assigned',
+          `You have been assigned a new task: "${formData.title}"`,
+          'task_assigned',
+          taskId
+        );
+      }
 
       toast({
         title: 'Task(s) assigned successfully',

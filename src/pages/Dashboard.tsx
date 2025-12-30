@@ -15,6 +15,7 @@ import { TaskDialog } from '@/components/TaskDialog';
 import { TaskAssignmentDialog } from '@/components/TaskAssignmentDialog';
 import { UserListView } from '@/components/UserListView';
 import { UserPerformanceView } from '@/components/UserPerformanceView';
+import { NotificationBell } from '@/components/NotificationBell';
 
 interface Task {
   id: string;
@@ -310,6 +311,7 @@ const Dashboard = () => {
             <span className="text-sm text-muted-foreground hidden md:inline">
               {user?.email}
             </span>
+            <NotificationBell />
             <Button variant="ghost" size="icon" onClick={toggleTheme}>
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
