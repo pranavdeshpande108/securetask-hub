@@ -8,10 +8,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Lock } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Loader2, Lock, CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/hooks/useNotifications';
 import { z } from 'zod';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const taskSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
@@ -19,6 +23,7 @@ const taskSchema = z.object({
   status: z.enum(['pending', 'in-progress', 'completed']),
   priority: z.enum(['low', 'medium', 'high']),
   is_private: z.boolean(),
+  deadline: z.date().nullable().optional(),
 });
 
 type TaskForm = z.infer<typeof taskSchema>;
@@ -30,6 +35,7 @@ interface Task {
   status: string;
   priority: string;
   is_private?: boolean;
+  deadline?: string | null;
 }
 
 interface TaskDialogProps {
@@ -49,6 +55,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
     status: 'pending',
     priority: 'medium',
     is_private: false,
+    deadline: null,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof TaskForm, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +68,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
         status: task.status as TaskForm['status'],
         priority: task.priority as TaskForm['priority'],
         is_private: task.is_private || false,
+        deadline: task.deadline ? new Date(task.deadline) : null,
       });
     } else {
       setFormData({
@@ -69,6 +77,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
         status: 'pending',
         priority: 'medium',
         is_private: false,
+        deadline: null,
       });
     }
     setErrors({});
@@ -99,6 +108,8 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
             status: formData.status,
             priority: formData.priority,
             is_private: formData.is_private,
+            deadline: formData.deadline?.toISOString() || null,
+            reminder_sent: formData.deadline ? false : true, // Reset reminder if deadline changed
           })
           .eq('id', task.id);
 
@@ -118,6 +129,7 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
             status: formData.status,
             priority: formData.priority,
             is_private: formData.is_private,
+            deadline: formData.deadline?.toISOString() || null,
             user_id: user!.id,
           })
           .select()
@@ -237,6 +249,64 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
                     <SelectItem value="high">High</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* Deadline Picker */}
+            <div className="space-y-2">
+              <Label>Deadline (Optional)</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !formData.deadline && "text-muted-foreground"
+                    )}
+                    disabled={isLoading}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.deadline ? format(formData.deadline, "PPP p") : <span>Pick a deadline</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={formData.deadline || undefined}
+                    onSelect={(date) => setFormData(prev => ({ ...prev, deadline: date || null }))}
+                    disabled={(date) => date < new Date()}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                  <div className="p-3 border-t">
+                    <Label className="text-sm">Time</Label>
+                    <Input
+                      type="time"
+                      value={formData.deadline ? format(formData.deadline, "HH:mm") : ""}
+                      onChange={(e) => {
+                        if (formData.deadline && e.target.value) {
+                          const [hours, minutes] = e.target.value.split(':');
+                          const newDate = new Date(formData.deadline);
+                          newDate.setHours(parseInt(hours), parseInt(minutes));
+                          setFormData(prev => ({ ...prev, deadline: newDate }));
+                        }
+                      }}
+                      className="mt-1"
+                    />
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {formData.deadline && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFormData(prev => ({ ...prev, deadline: null }))}
+                  className="text-muted-foreground"
+                >
+                  Clear deadline
+                </Button>
+              )}
             </div>
 
             {/* Private Task Toggle */}
@@ -252,7 +322,6 @@ export const TaskDialog = ({ open, onOpenChange, onTaskSaved, task }: TaskDialog
                 Private Task (only visible to you)
               </Label>
             </div>
-          </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>

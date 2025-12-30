@@ -16,6 +16,7 @@ import { TaskAssignmentDialog } from '@/components/TaskAssignmentDialog';
 import { UserListView } from '@/components/UserListView';
 import { UserPerformanceView } from '@/components/UserPerformanceView';
 import { NotificationBell } from '@/components/NotificationBell';
+import { ClockCalendarWidget } from '@/components/ClockCalendarWidget';
 
 interface Task {
   id: string;
@@ -324,6 +325,11 @@ const Dashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Clock & Calendar Widget */}
+        <div className="mb-6">
+          <ClockCalendarWidget />
+        </div>
+
         <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold mb-2">
