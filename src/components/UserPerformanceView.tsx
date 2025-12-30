@@ -179,18 +179,27 @@ export const UserPerformanceView = ({
                       data={statusData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
+                      innerRadius={50}
+                      outerRadius={80}
                       paddingAngle={5}
                       dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
+                      label={false}
                     >
                       {statusData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip />
-                    <Legend />
+                    <Tooltip formatter={(value, name) => [value, name]} />
+                    <Legend 
+                      layout="horizontal" 
+                      verticalAlign="bottom" 
+                      align="center"
+                      wrapperStyle={{ paddingTop: '10px' }}
+                      formatter={(value, entry) => {
+                        const dataItem = statusData.find(d => d.name === value);
+                        return `${value}: ${dataItem?.value || 0}`;
+                      }}
+                    />
                   </RechartsPie>
                 </ResponsiveContainer>
               </div>
@@ -202,18 +211,27 @@ export const UserPerformanceView = ({
                       data={priorityData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
+                      innerRadius={50}
+                      outerRadius={80}
                       paddingAngle={5}
                       dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
+                      label={false}
                     >
                       {priorityData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip />
-                    <Legend />
+                    <Tooltip formatter={(value, name) => [value, name]} />
+                    <Legend 
+                      layout="horizontal" 
+                      verticalAlign="bottom" 
+                      align="center"
+                      wrapperStyle={{ paddingTop: '10px' }}
+                      formatter={(value) => {
+                        const dataItem = priorityData.find(d => d.name === value);
+                        return `${value}: ${dataItem?.value || 0}`;
+                      }}
+                    />
                   </RechartsPie>
                 </ResponsiveContainer>
               </div>
