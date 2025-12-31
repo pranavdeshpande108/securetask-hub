@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, List, Lock } from 'lucide-react';
+import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, List, Lock, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 import { TaskAssignmentDialog } from '@/components/TaskAssignmentDialog';
@@ -17,6 +17,7 @@ import { UserListView } from '@/components/UserListView';
 import { UserPerformanceView } from '@/components/UserPerformanceView';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ClockCalendarWidget } from '@/components/ClockCalendarWidget';
+import { ChatSection } from '@/components/ChatSection';
 
 interface Task {
   id: string;
@@ -55,6 +56,7 @@ const Dashboard = () => {
   const [adminViewMode, setAdminViewMode] = useState<'self' | 'all'>('all');
   const [showUserList, setShowUserList] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SelectedUser | null>(null);
+  const [showChat, setShowChat] = useState(false);
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -325,9 +327,10 @@ const Dashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {/* Clock & Calendar Widget */}
-        <div className="mb-6">
+        {/* Clock, Calendar & Chat Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <ClockCalendarWidget />
+          <ChatSection />
         </div>
 
         <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
