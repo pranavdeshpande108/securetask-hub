@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,10 +8,11 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useChat } from '@/hooks/useChat';
 import { useAuth } from '@/contexts/AuthContext';
-import { MessageSquare, Send, ArrowLeft, Users } from 'lucide-react';
+import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const ChatSection = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
     messages,
@@ -19,10 +21,13 @@ export const ChatSection = () => {
     setSelectedUser,
     sendMessage,
     loading,
+    uploading,
     totalUnread,
   } = useChat();
   const [newMessage, setNewMessage] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -33,15 +38,27 @@ export const ChatSection = () => {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!newMessage.trim()) return;
-    await sendMessage(newMessage);
+    if (!newMessage.trim() && !selectedFile) return;
+    await sendMessage(newMessage, selectedFile || undefined);
     setNewMessage('');
+    setSelectedFile(null);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size must be less than 10MB');
+        return;
+      }
+      setSelectedFile(file);
     }
   };
 
@@ -58,6 +75,10 @@ export const ChatSection = () => {
   };
 
   const selectedUserData = chatUsers.find((u) => u.id === selectedUser);
+
+  const isImageFile = (type: string | null | undefined) => {
+    return type?.startsWith('image/');
+  };
 
   return (
     <Card className="w-full h-[500px] flex flex-col overflow-hidden border-0 shadow-lg bg-gradient-to-br from-card via-card to-primary/5">
@@ -77,17 +98,28 @@ export const ChatSection = () => {
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
-                <span>{selectedUserData?.full_name || selectedUserData?.email}</span>
+                <span className="truncate max-w-[120px]">{selectedUserData?.full_name || selectedUserData?.email}</span>
               </div>
             ) : (
               'Messages'
             )}
           </div>
-          {!selectedUser && totalUnread > 0 && (
-            <Badge variant="destructive" className="rounded-full">
-              {totalUnread} new
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {!selectedUser && totalUnread > 0 && (
+              <Badge variant="destructive" className="rounded-full">
+                {totalUnread}
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/chat')}
+              className="text-xs gap-1"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Full View
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
 
@@ -100,6 +132,7 @@ export const ChatSection = () => {
                 <div className="text-center py-12 text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">No users available to chat</p>
+                  <p className="text-xs mt-1">Other registered users will appear here</p>
                 </div>
               ) : (
                 chatUsers.map((chatUser) => (
@@ -113,8 +146,8 @@ export const ChatSection = () => {
                         {getInitials(chatUser.full_name, chatUser.email)}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 text-left">
-                      <div className="font-medium text-foreground">
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-medium text-foreground truncate">
                         {chatUser.full_name || chatUser.email}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
@@ -138,7 +171,7 @@ export const ChatSection = () => {
               <div className="py-4 space-y-4">
                 {loading ? (
                   <div className="text-center py-12 text-muted-foreground">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-3" />
+                    <Loader2 className="animate-spin rounded-full h-8 w-8 mx-auto mb-3 text-primary" />
                     <p className="text-sm">Loading messages...</p>
                   </div>
                 ) : messages.length === 0 ? (
@@ -162,7 +195,34 @@ export const ChatSection = () => {
                               : 'bg-muted rounded-bl-sm'
                           }`}
                         >
-                          <p className="text-sm break-words">{msg.message}</p>
+                          {msg.file_url && (
+                            <div className="mb-2">
+                              {isImageFile(msg.file_type) ? (
+                                <a href={msg.file_url} target="_blank" rel="noopener noreferrer">
+                                  <img
+                                    src={msg.file_url}
+                                    alt={msg.file_name || 'Image'}
+                                    className="max-w-full rounded-lg max-h-40 object-cover"
+                                  />
+                                </a>
+                              ) : (
+                                <a
+                                  href={msg.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 p-2 rounded-lg ${
+                                    isOwn ? 'bg-primary-foreground/10' : 'bg-background'
+                                  }`}
+                                >
+                                  <FileIcon className="h-4 w-4 shrink-0" />
+                                  <span className="text-xs truncate">{msg.file_name}</span>
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          {msg.message && !msg.message.startsWith('Sent a file:') && (
+                            <p className="text-sm break-words">{msg.message}</p>
+                          )}
                           <p
                             className={`text-xs mt-1 ${
                               isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'
@@ -181,21 +241,60 @@ export const ChatSection = () => {
 
             {/* Message Input */}
             <div className="p-4 border-t border-border/50 bg-muted/30">
+              {selectedFile && (
+                <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-lg text-sm">
+                  {selectedFile.type.startsWith('image/') ? (
+                    <ImageIcon className="h-4 w-4 text-primary shrink-0" />
+                  ) : (
+                    <FileIcon className="h-4 w-4 text-primary shrink-0" />
+                  )}
+                  <span className="truncate flex-1 text-xs">{selectedFile.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedFile(null)}
+                    className="h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
               <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="shrink-0 h-9 w-9"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
                 <Input
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder="Type a message..."
-                  className="flex-1 rounded-full bg-background border-border/50 focus-visible:ring-primary"
+                  className="flex-1 rounded-full bg-background border-border/50 focus-visible:ring-primary h-9"
+                  disabled={uploading}
                 />
                 <Button
                   onClick={handleSend}
-                  disabled={!newMessage.trim()}
+                  disabled={(!newMessage.trim() && !selectedFile) || uploading}
                   size="icon"
-                  className="rounded-full shrink-0"
+                  className="rounded-full shrink-0 h-9 w-9"
                 >
-                  <Send className="h-4 w-4" />
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             </div>

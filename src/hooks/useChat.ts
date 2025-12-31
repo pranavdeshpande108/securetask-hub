@@ -10,6 +10,9 @@ interface ChatMessage {
   message: string;
   is_read: boolean;
   created_at: string;
+  file_url?: string | null;
+  file_name?: string | null;
+  file_type?: string | null;
   sender?: {
     full_name: string | null;
     email: string;
@@ -34,13 +37,13 @@ export const useChat = () => {
   const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  // Fetch all users (for admin) or just admin users (for regular users)
+  // Fetch all users for chat
   const fetchChatUsers = async () => {
     if (!user) return;
 
     try {
-      // Get all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, email, full_name')
@@ -99,7 +102,6 @@ export const useChat = () => {
         .eq('receiver_id', user.id)
         .eq('is_read', false);
 
-      // Refresh unread counts
       fetchChatUsers();
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -108,15 +110,61 @@ export const useChat = () => {
     }
   };
 
-  // Send a message
-  const sendMessage = async (message: string) => {
-    if (!user || !selectedUser || !message.trim()) return;
+  // Upload file and return URL
+  const uploadFile = async (file: File): Promise<{ url: string; name: string; type: string } | null> => {
+    if (!user) return null;
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('chat-attachments')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat-attachments')
+        .getPublicUrl(fileName);
+
+      return {
+        url: publicUrl,
+        name: file.name,
+        type: file.type,
+      };
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to upload file',
+        variant: 'destructive',
+      });
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Send a message with optional file
+  const sendMessage = async (message: string, file?: File) => {
+    if (!user || !selectedUser) return;
+    if (!message.trim() && !file) return;
 
     try {
+      let fileData = null;
+      if (file) {
+        fileData = await uploadFile(file);
+      }
+
       const { error } = await supabase.from('chat_messages').insert({
         sender_id: user.id,
         receiver_id: selectedUser,
-        message: message.trim(),
+        message: message.trim() || (fileData ? `Sent a file: ${fileData.name}` : ''),
+        file_url: fileData?.url || null,
+        file_name: fileData?.name || null,
+        file_type: fileData?.type || null,
       });
 
       if (error) throw error;
@@ -146,12 +194,10 @@ export const useChat = () => {
         async (payload) => {
           const newMessage = payload.new as ChatMessage;
           
-          // If the message is for the current conversation
           if (
             (newMessage.sender_id === selectedUser && newMessage.receiver_id === user.id) ||
             (newMessage.sender_id === user.id && newMessage.receiver_id === selectedUser)
           ) {
-            // Fetch the complete message with sender/receiver info
             const { data } = await supabase
               .from('chat_messages')
               .select(`
@@ -160,12 +206,11 @@ export const useChat = () => {
                 receiver:profiles!chat_messages_receiver_id_fkey(full_name, email)
               `)
               .eq('id', newMessage.id)
-              .single();
+              .maybeSingle();
 
             if (data) {
               setMessages((prev) => [...prev, data]);
 
-              // Mark as read if we're the receiver
               if (newMessage.receiver_id === user.id) {
                 await supabase
                   .from('chat_messages')
@@ -175,7 +220,6 @@ export const useChat = () => {
             }
           }
 
-          // Refresh unread counts
           fetchChatUsers();
         }
       )
@@ -186,12 +230,10 @@ export const useChat = () => {
     };
   }, [user, selectedUser]);
 
-  // Fetch users on mount
   useEffect(() => {
     fetchChatUsers();
   }, [user]);
 
-  // Fetch messages when selected user changes
   useEffect(() => {
     if (selectedUser) {
       fetchMessages();
@@ -209,6 +251,7 @@ export const useChat = () => {
     setSelectedUser,
     sendMessage,
     loading,
+    uploading,
     totalUnread,
     refreshUsers: fetchChatUsers,
   };
