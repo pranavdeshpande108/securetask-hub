@@ -62,6 +62,7 @@ export const useChat = () => {
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Update user presence
   const updatePresence = useCallback(async (isOnline: boolean, typingTo: string | null = null) => {
@@ -438,7 +439,7 @@ export const useChat = () => {
     }
   };
 
-  // Subscribe to new messages
+  // Subscribe to new messages and read status updates
   useEffect(() => {
     if (!user) return;
 
@@ -481,6 +482,25 @@ export const useChat = () => {
           }
 
           fetchChatUsers();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+        },
+        (payload) => {
+          const updatedMessage = payload.new as ChatMessage;
+          // Update read status in real-time
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === updatedMessage.id
+                ? { ...msg, is_read: updatedMessage.is_read }
+                : msg
+            )
+          );
         }
       )
       .on(
@@ -598,8 +618,17 @@ export const useChat = () => {
 
   const totalUnread = chatUsers.reduce((sum, u) => sum + u.unread_count, 0);
 
+  // Filter messages based on search query
+  const filteredMessages = searchQuery.trim()
+    ? messages.filter((msg) =>
+        msg.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        msg.file_name?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : messages;
+
   return {
-    messages,
+    messages: filteredMessages,
+    allMessages: messages,
     chatUsers,
     selectedUser,
     setSelectedUser,
@@ -617,5 +646,7 @@ export const useChat = () => {
     removeReaction,
     setTypingStatus,
     otherUserTyping,
+    searchQuery,
+    setSearchQuery,
   };
 };

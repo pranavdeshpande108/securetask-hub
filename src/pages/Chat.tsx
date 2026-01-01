@@ -52,6 +52,9 @@ import {
   Timer,
   Smile,
   Circle,
+  Search,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -79,6 +82,8 @@ const Chat = () => {
     removeReaction,
     setTypingStatus,
     otherUserTyping,
+    searchQuery,
+    setSearchQuery,
   } = useChat();
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -318,82 +323,105 @@ const Chat = () => {
             {selectedUser ? (
               <>
                 {/* Chat Header */}
-                <div className="p-4 border-b bg-gradient-to-r from-primary/10 via-primary/5 to-transparent flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setSelectedUser(null)}
-                      className="md:hidden"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                    <div className="relative">
-                      <Avatar className="h-10 w-10 border-2 border-primary/20">
-                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                          {selectedUserData && getInitials(selectedUserData.full_name, selectedUserData.email)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <Circle 
-                        className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 ${
-                          selectedUserData?.is_online 
-                            ? 'text-green-500 fill-green-500' 
-                            : 'text-muted-foreground fill-muted-foreground'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <div className="font-semibold flex items-center gap-2">
-                        {selectedUserData?.full_name || selectedUserData?.email}
-                        {isUserBlocked && <Ban className="h-4 w-4 text-destructive" />}
+                <div className="p-4 border-b bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setSelectedUser(null)}
+                        className="md:hidden"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      <div className="relative">
+                        <Avatar className="h-10 w-10 border-2 border-primary/20">
+                          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                            {selectedUserData && getInitials(selectedUserData.full_name, selectedUserData.email)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Circle 
+                          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 ${
+                            selectedUserData?.is_online 
+                              ? 'text-green-500 fill-green-500' 
+                              : 'text-muted-foreground fill-muted-foreground'
+                          }`}
+                        />
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {otherUserTyping ? (
-                          <span className="text-primary animate-pulse">typing...</span>
-                        ) : selectedUserData?.is_online ? (
-                          'Online'
-                        ) : selectedUserData?.last_seen ? (
-                          `Last seen ${formatDistanceToNow(new Date(selectedUserData.last_seen), { addSuffix: true })}`
+                      <div>
+                        <div className="font-semibold flex items-center gap-2">
+                          {selectedUserData?.full_name || selectedUserData?.email}
+                          {isUserBlocked && <Ban className="h-4 w-4 text-destructive" />}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {otherUserTyping ? (
+                            <span className="text-primary animate-pulse">typing...</span>
+                          ) : selectedUserData?.is_online ? (
+                            'Online'
+                          ) : selectedUserData?.last_seen ? (
+                            `Last seen ${formatDistanceToNow(new Date(selectedUserData.last_seen), { addSuffix: true })}`
+                          ) : (
+                            selectedUserData?.email
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Chat Actions Menu */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {isUserBlocked ? (
+                          <DropdownMenuItem onClick={() => unblockUser(selectedUser)}>
+                            <Ban className="mr-2 h-4 w-4" />
+                            Unblock User
+                          </DropdownMenuItem>
                         ) : (
-                          selectedUserData?.email
+                          <DropdownMenuItem onClick={() => blockUser(selectedUser)}>
+                            <Ban className="mr-2 h-4 w-4" />
+                            Block User
+                          </DropdownMenuItem>
                         )}
-                      </div>
-                    </div>
+                        <DropdownMenuItem onClick={() => setShowReportDialog(true)}>
+                          <Flag className="mr-2 h-4 w-4" />
+                          Report User
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => setShowClearDialog(true)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Clear Chat
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   
-                  {/* Chat Actions Menu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {isUserBlocked ? (
-                        <DropdownMenuItem onClick={() => unblockUser(selectedUser)}>
-                          <Ban className="mr-2 h-4 w-4" />
-                          Unblock User
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem onClick={() => blockUser(selectedUser)}>
-                          <Ban className="mr-2 h-4 w-4" />
-                          Block User
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => setShowReportDialog(true)}>
-                        <Flag className="mr-2 h-4 w-4" />
-                        Report User
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        onClick={() => setShowClearDialog(true)}
-                        className="text-destructive"
+                  {/* Search Messages */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search messages..."
+                      className="pl-9 bg-background/50"
+                    />
+                    {searchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        onClick={() => setSearchQuery('')}
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Clear Chat
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Messages */}
@@ -464,13 +492,20 @@ const Chat = () => {
                                 {msg.message && !msg.message.startsWith('Sent a file:') && (
                                   <p className="text-sm break-words">{msg.message}</p>
                                 )}
-                                <p
-                                  className={`text-xs mt-1 ${
+                                <div
+                                  className={`flex items-center gap-1 text-xs mt-1 ${
                                     isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'
                                   }`}
                                 >
-                                  {format(new Date(msg.created_at), 'h:mm a')}
-                                </p>
+                                  <span>{format(new Date(msg.created_at), 'h:mm a')}</span>
+                                  {isOwn && (
+                                    msg.is_read ? (
+                                      <CheckCheck className="h-3.5 w-3.5 text-blue-400" />
+                                    ) : (
+                                      <Check className="h-3.5 w-3.5" />
+                                    )
+                                  )}
+                                </div>
                               </div>
                               
                               {/* Reactions Display */}
