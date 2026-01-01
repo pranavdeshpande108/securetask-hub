@@ -537,7 +537,11 @@ export const useChat = () => {
               .maybeSingle();
 
             if (data) {
-              setMessages((prev) => [...prev, { ...data, reactions: [] }]);
+              setMessages((prev) => {
+                // Avoid duplicating messages if we already have this id (optimistic insert + realtime insert race)
+                if (prev.some(m => m.id === data.id)) return prev;
+                return [...prev, { ...data, reactions: [] }];
+              });
 
               // Update chat user last message (mark read if viewing)
               updateChatUserLastMessage(selectedUser!, data?.message || null, data?.sender_id || null, data?.created_at || new Date().toISOString(), newMessage.receiver_id === user.id ? true : null);
@@ -553,7 +557,8 @@ export const useChat = () => {
 
           // For messages that don't belong to the open conversation, move that conversation to top
           if (!(newMessage.sender_id === selectedUser && newMessage.receiver_id === user.id) && !(newMessage.sender_id === user.id && newMessage.receiver_id === selectedUser)) {
-            updateChatUserLastMessage(newMessage.sender_id, (newMessage as any).message || null, newMessage.sender_id, (newMessage as any).created_at || new Date().toISOString(), false);
+            const otherId = newMessage.sender_id === user.id ? newMessage.receiver_id : newMessage.sender_id;
+            updateChatUserLastMessage(otherId, (newMessage as any).message || null, newMessage.sender_id, (newMessage as any).created_at || new Date().toISOString(), false);
           }
 
           fetchChatUsers();
