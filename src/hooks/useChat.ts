@@ -42,6 +42,10 @@ interface ChatUser {
   last_seen?: string;
   is_typing?: boolean;
   is_blocked?: boolean;
+  last_message_at?: string | null;
+  last_message?: string | null;
+  last_message_is_read?: boolean;
+  last_message_sender_id?: string | null;
 }
 
 interface UserPresence {
@@ -109,6 +113,39 @@ export const useChat = () => {
     }
   };
 
+  // Update a chat user's last message locally and move them to top
+  const updateChatUserLastMessage = (userId: string, message: string | null, senderId: string | null, createdAt: string | null, isRead: boolean | null) => {
+    setChatUsers(prev => {
+      const found = prev.find(p => p.id === userId);
+      if (!found) return prev;
+
+      const updated = prev.map(p =>
+        p.id === userId
+          ? {
+              ...p,
+              last_message: message || p.last_message,
+              last_message_at: createdAt || p.last_message_at,
+              last_message_is_read: typeof isRead === 'boolean' ? isRead : p.last_message_is_read,
+              last_message_sender_id: senderId || p.last_message_sender_id,
+            }
+          : p
+      );
+
+      // sort by last_message_at desc, then unread_count, then name
+      updated.sort((a, b) => {
+        const at = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+        const bt = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+        if (bt !== at) return bt - at;
+        const au = a.unread_count || 0;
+        const bu = b.unread_count || 0;
+        if (bu !== au) return bu - au;
+        return (a.full_name || a.email).localeCompare(b.full_name || b.email);
+      });
+
+      return updated;
+    });
+  };
+
   // Fetch all users for chat with presence
   const fetchChatUsers = async () => {
     if (!user) return;
@@ -126,7 +163,7 @@ export const useChat = () => {
         .from('user_presence')
         .select('*');
 
-      // Get unread counts and blocked status for each user
+      // Get unread counts, blocked status and last message for each user
       const usersWithData = await Promise.all(
         (profiles || []).map(async (profile) => {
           const { count } = await supabase
@@ -139,6 +176,15 @@ export const useChat = () => {
           const presence = presenceData?.find(p => p.user_id === profile.id);
           const isBlocked = blockedUsers.includes(profile.id);
 
+          // Get the last message between the current user and this profile
+          const { data: lastMsg } = await supabase
+            .from('chat_messages')
+            .select('id, message, created_at, sender_id, receiver_id, is_read')
+            .or(`and(sender_id.eq.${user.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${user.id})`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
           return {
             ...profile,
             unread_count: count || 0,
@@ -146,9 +192,24 @@ export const useChat = () => {
             last_seen: presence?.last_seen,
             is_typing: presence?.is_typing_to === user.id,
             is_blocked: isBlocked,
+            last_message_at: lastMsg?.created_at || null,
+            last_message: lastMsg?.message || null,
+            last_message_is_read: lastMsg?.is_read || false,
+            last_message_sender_id: lastMsg?.sender_id || null,
           };
         })
       );
+
+      // Sort users by most recent activity (last message), then by unread count, then name
+      usersWithData.sort((a, b) => {
+        const at = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+        const bt = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+        if (bt !== at) return bt - at;
+        const au = a.unread_count || 0;
+        const bu = b.unread_count || 0;
+        if (bu !== au) return bu - au;
+        return (a.full_name || a.email).localeCompare(b.full_name || b.email);
+      });
 
       setChatUsers(usersWithData);
     } catch (error) {
@@ -273,7 +334,7 @@ export const useChat = () => {
         ? new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
         : null;
 
-      const { error } = await supabase.from('chat_messages').insert({
+      const { data: insertedMessage, error } = await supabase.from('chat_messages').insert({
         sender_id: user.id,
         receiver_id: selectedUser,
         message: message.trim() || (fileData ? `Sent a file: ${fileData.name}` : ''),
@@ -281,10 +342,16 @@ export const useChat = () => {
         file_name: fileData?.name || null,
         file_type: fileData?.type || null,
         expires_at: expiresAt,
-      });
+      }).select().maybeSingle();
 
       if (error) throw error;
       setTypingStatus(false);
+
+      // Append to current conversation immediately and move conversation to top
+      if (insertedMessage) {
+        setMessages(prev => [...prev, { ...insertedMessage, reactions: [] }]);
+        updateChatUserLastMessage(selectedUser, insertedMessage.message || null, user.id, insertedMessage.created_at || new Date().toISOString(), false);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -472,6 +539,9 @@ export const useChat = () => {
             if (data) {
               setMessages((prev) => [...prev, { ...data, reactions: [] }]);
 
+              // Update chat user last message (mark read if viewing)
+              updateChatUserLastMessage(selectedUser!, data?.message || null, data?.sender_id || null, data?.created_at || new Date().toISOString(), newMessage.receiver_id === user.id ? true : null);
+
               if (newMessage.receiver_id === user.id) {
                 await supabase
                   .from('chat_messages')
@@ -479,6 +549,11 @@ export const useChat = () => {
                   .eq('id', newMessage.id);
               }
             }
+          }
+
+          // For messages that don't belong to the open conversation, move that conversation to top
+          if (!(newMessage.sender_id === selectedUser && newMessage.receiver_id === user.id) && !(newMessage.sender_id === user.id && newMessage.receiver_id === selectedUser)) {
+            updateChatUserLastMessage(newMessage.sender_id, (newMessage as any).message || null, newMessage.sender_id, (newMessage as any).created_at || new Date().toISOString(), false);
           }
 
           fetchChatUsers();
