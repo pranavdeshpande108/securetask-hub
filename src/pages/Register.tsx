@@ -105,7 +105,17 @@ const Register = () => {
       const { error } = await signUp(formData.email, formData.password, formData.fullName, formData.role);
       
       if (!error) {
-        navigate('/dashboard');
+        // If the user was auto-signed-in, a session will exist and we can navigate to dashboard.
+        // Otherwise, inform the user to confirm their email.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          navigate('/dashboard');
+        } else {
+          toast({
+            title: 'Registration successful',
+            description: 'Please check your email to confirm your account before signing in.',
+          });
+        }
       }
     } catch (error) {
       if (error instanceof z.ZodError) {

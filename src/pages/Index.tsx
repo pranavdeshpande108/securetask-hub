@@ -95,7 +95,7 @@ const Index = () => {
 
       <footer className="border-t py-8 mt-20">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p>© 2024 TaskFlow. Built with modern web technologies.</p>
+          <p>© 2026 TaskFlow. Built with modern web technologies.</p>
         </div>
       </footer>
     </div>

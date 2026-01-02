@@ -78,10 +78,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      toast({
-        title: "Registration successful!",
-        description: "Welcome! You can now use the app.",
-      });
+      // Try to automatically sign in the newly created user so they can access protected routes immediately
+      try {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          // Most commonly this will fail when email confirmation is required
+          toast({
+            title: "Registration successful!",
+            description: "Please check your email to confirm your account before signing in.",
+          });
+        } else {
+          toast({
+            title: "Registration successful!",
+            description: "Welcome! You have been signed in.",
+          });
+        }
+      } catch (err) {
+        console.error('Auto sign-in error:', err);
+        toast({
+          title: "Registration successful!",
+          description: "Please check your email to confirm your account.",
+        });
+      }
 
       return { error: null };
     } catch (error) {
