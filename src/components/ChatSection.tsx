@@ -7,8 +7,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useChat } from '@/hooks/useChat';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2, Copy, Trash2, Share2, MoreHorizontal } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const ChatSection = () => {
@@ -23,11 +26,105 @@ export const ChatSection = () => {
     loading,
     uploading,
     totalUnread,
+    deleteMessage,
   } = useChat();
+  const { toast } = useToast();
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Image modal state (open images only in-app, block context menu to avoid opening in new tab)
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
+  const openImage = (url: string) => {
+    setModalImageUrl(url);
+    setShowImageModal(true);
+  };
+
+  // File preview modal state
+  const [showFileModal, setShowFileModal] = useState(false);
+  const [modalFileUrl, setModalFileUrl] = useState<string | null>(null);
+  const [modalFileName, setModalFileName] = useState<string | null>(null);
+  const [modalFileType, setModalFileType] = useState<string | null>(null);
+  const openFile = (url: string, name?: string, type?: string) => {
+    setModalFileUrl(url);
+    setModalFileName(name || null);
+    setModalFileType(type || null);
+    setShowFileModal(true);
+  };
+
+  // Preview helper for files (PDF/office) - try blob fetch then Google Viewer fallback
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let createdObjectUrl: string | null = null;
+
+    const preparePreview = async () => {
+      setPreviewUrl(null);
+      setPreviewError(null);
+      if (!showFileModal || !modalFileUrl) return;
+
+      const isPdf = modalFileType?.includes('pdf') || (modalFileName || '').toLowerCase().endsWith('.pdf');
+      const isOffice = /(application\/msword|vnd\.openxmlformats-officedocument|application\/vnd\.ms-excel|application\/vnd\.ms-powerpoint|\.docx$|\.doc$|\.pptx$|\.ppt$|\.xlsx$|\.xls$)/i.test(modalFileType || (modalFileName || ''));
+
+      if (isPdf) {
+        try {
+          const res = await fetch(modalFileUrl!);
+          if (!res.ok) throw new Error('Network');
+          const blob = await res.blob();
+          createdObjectUrl = URL.createObjectURL(blob);
+          if (!active) return;
+          setPreviewUrl(createdObjectUrl);
+        } catch (err) {
+          const viewer = `https://docs.google.com/gview?url=${encodeURIComponent(modalFileUrl!)}&embedded=true`;
+          setPreviewUrl(viewer);
+          setPreviewError('Direct preview failed; using Google Docs viewer. If viewer cannot access the file, download instead.');
+        }
+        return;
+      }
+
+      if (isOffice) {
+        const viewer = `https://docs.google.com/gview?url=${encodeURIComponent(modalFileUrl!)}&embedded=true`;
+        setPreviewUrl(viewer);
+        setPreviewError(null);
+        return;
+      }
+
+      setPreviewUrl(null);
+    };
+
+    preparePreview();
+
+    return () => {
+      active = false;
+      if (createdObjectUrl) URL.revokeObjectURL(createdObjectUrl);
+      setPreviewUrl(null);
+      setPreviewError(null);
+    };
+  }, [showFileModal, modalFileUrl, modalFileName, modalFileType]);
+
+  const downloadFile = async (url?: string, name?: string) => {
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Network error');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = name || 'file';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      toast({ title: 'Downloaded', description: `${name || 'File'} downloaded` });
+    } catch (err) {
+      toast({ title: 'Download failed', description: 'Could not download file' });
+    }
+  }; 
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -54,8 +151,9 @@ export const ChatSection = () => {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
+      const MAX = 100 * 1024 * 1024; // 100MB
+      if (file.size > MAX) {
+        alert('File size must be 100MB or less');
         return;
       }
       setSelectedFile(file);
@@ -189,7 +287,7 @@ export const ChatSection = () => {
                         className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                          className={`relative max-w-[75%] rounded-2xl px-4 py-2 ${
                             isOwn
                               ? 'bg-primary text-primary-foreground rounded-br-sm'
                               : 'bg-muted rounded-bl-sm'
@@ -198,26 +296,35 @@ export const ChatSection = () => {
                           {msg.file_url && (
                             <div className="mb-2">
                               {isImageFile(msg.file_type) ? (
-                                <a href={msg.file_url} target="_blank" rel="noopener noreferrer">
-                                  <img
-                                    src={msg.file_url}
-                                    alt={msg.file_name || 'Image'}
-                                    className="max-w-full rounded-lg max-h-40 object-cover"
-                                  />
-                                </a>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => openImage(msg.file_url!)}
+                                    onContextMenu={(e) => e.preventDefault()}
+                                    className="p-0 bg-transparent border-0"
+                                  >
+                                    <img
+                                      src={msg.file_url}
+                                      alt={msg.file_name || 'Image'}
+                                      className="max-w-full rounded-lg max-h-40 object-cover select-none"
+                                      draggable={false}
+                                      onDragStart={(e) => e.preventDefault()}
+                                    />
+                                  </button>
+                                </>
                               ) : (
-                                <a
-                                  href={msg.file_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() => openFile(msg.file_url!, msg.file_name, msg.file_type)}
+                                  onContextMenu={(e) => e.preventDefault()}
                                   className={`flex items-center gap-2 p-2 rounded-lg ${
                                     isOwn ? 'bg-primary-foreground/10' : 'bg-background'
                                   }`}
                                 >
                                   <FileIcon className="h-4 w-4 shrink-0" />
                                   <span className="text-xs truncate">{msg.file_name}</span>
-                                </a>
-                              )}
+                                </button>
+                              )} 
                             </div>
                           )}
                           {msg.message && !msg.message.startsWith('Sent a file:') && (
@@ -230,6 +337,46 @@ export const ChatSection = () => {
                           >
                             {format(new Date(msg.created_at), 'h:mm a')}
                           </p>
+
+                          <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" className="p-1">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
+                                <DropdownMenuItem onClick={async () => {
+                                  if (msg.message) {
+                                    await navigator.clipboard.writeText(msg.message);
+                                    toast({ title: 'Copied', description: 'Message copied to clipboard' });
+                                  }
+                                }}>
+                                  <Copy className="mr-2 h-3.5 w-3.5" />
+                                  Copy
+                                </DropdownMenuItem>
+                                {msg.file_url && (
+                                  <DropdownMenuItem onClick={async () => {
+                                    await navigator.clipboard.writeText(msg.file_url!);
+                                    toast({ title: 'Copied', description: 'File URL copied to clipboard' });
+                                  }}>
+                                    <Share2 className="mr-2 h-3.5 w-3.5" />
+                                    Copy file link
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                {isOwn && (
+                                  <DropdownMenuItem onClick={async () => {
+                                    if (!confirm('Delete this message?')) return;
+                                    await deleteMessage(msg.id);
+                                  }} className="text-destructive">
+                                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       </div>
                     );
@@ -298,6 +445,63 @@ export const ChatSection = () => {
                 </Button>
               </div>
             </div>
+
+            {/* Image preview dialog (prevents opening image in new tab/window) */}
+            <Dialog open={showImageModal} onOpenChange={(open) => { if (!open) { setShowImageModal(false); setModalImageUrl(null); } }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Image preview</DialogTitle>
+                </DialogHeader>
+                <div className="max-h-[80vh] flex items-center justify-center">
+                  <img src={modalImageUrl || ''} alt="Preview" className="max-h-[80vh] max-w-full object-contain" draggable={false} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => { setShowImageModal(false); setModalImageUrl(null); }}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* File preview modal */}
+            <Dialog open={showFileModal} onOpenChange={(open) => { if (!open) { setShowFileModal(false); setModalFileUrl(null); setModalFileName(null); setModalFileType(null); } }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{modalFileName || 'File preview'}</DialogTitle>
+                </DialogHeader>
+                <div className="max-h-[80vh]">
+                  {((modalFileType && modalFileType.includes('pdf')) || (modalFileName || '').toLowerCase().endsWith('.pdf')) ? (
+                    previewUrl ? (
+                      <iframe src={previewUrl || ''} title={modalFileName || 'pdf'} className="w-full h-[70vh] border-none" />
+                    ) : (
+                      <div className="p-6 text-center">
+                        <div className="mb-2">Loading preview...</div>
+                        {previewError && <div className="text-sm text-muted-foreground mb-4">{previewError}</div>}
+                        <div className="flex justify-center gap-2">
+                          <Button onClick={() => downloadFile(modalFileUrl!, modalFileName || 'file')}>Download</Button>
+                          <Button variant="outline" onClick={() => { setShowFileModal(false); setModalFileUrl(null); setModalFileName(null); setModalFileType(null); }}>Close</Button>
+                        </div>
+                      </div>
+                    )
+                  ) : modalFileType && /msword|openxmlformats-officedocument|vnd\.ms-excel|vnd\.ms-powerpoint/i.test(modalFileType || '') ? (
+                    previewUrl ? (
+                      <iframe src={previewUrl || ''} title={modalFileName || 'file'} className="w-full h-[70vh] border-none" />
+                    ) : (
+                      <div className="p-6 text-center text-sm text-muted-foreground">Preview not available</div>
+                    )
+                  ) : modalFileUrl ? (
+                    <div className="flex flex-col items-center gap-4 py-8">
+                      <FileIcon className="h-8 w-8" />
+                      <div className="text-sm">{modalFileName}</div>
+                      <div className="flex gap-2 mt-4">
+                        <Button onClick={() => downloadFile(modalFileUrl!, modalFileName || 'file')}>Download</Button>
+                        <Button variant="outline" onClick={() => { setShowFileModal(false); setModalFileUrl(null); setModalFileName(null); setModalFileType(null); }}>Close</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-sm text-muted-foreground">No preview available</div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </CardContent>

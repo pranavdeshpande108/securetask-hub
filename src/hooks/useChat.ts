@@ -276,6 +276,17 @@ export const useChat = () => {
   const uploadFile = async (file: File): Promise<{ url: string; name: string; type: string } | null> => {
     if (!user) return null;
 
+    // Enforce 100MB size limit at the upload layer as well
+    const MAX_BYTES = 100 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      toast({
+        title: 'File too large',
+        description: 'Files must be 100MB or smaller.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -306,6 +317,46 @@ export const useChat = () => {
       return null;
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Delete a single message by id (sender or admin)
+  const deleteMessage = async (messageId: string) => {
+    if (!user) return false;
+
+    try {
+      const { error } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('sender_id', user.id);
+
+      if (error) {
+        // If sender check failed (not the sender), try admin delete (requires server-side or row-level permission); for now, only allow sender to delete
+        console.error('Error deleting message:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to delete message',
+          variant: 'destructive',
+        });
+        return false;
+      }
+
+      // Optimistically remove message from local state
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      toast({
+        title: 'Message deleted',
+        description: 'The message was successfully deleted.',
+      });
+      return true;
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete message',
+        variant: 'destructive',
+      });
+      return false;
     }
   };
 
@@ -728,5 +779,6 @@ export const useChat = () => {
     otherUserTyping,
     searchQuery,
     setSearchQuery,
+    deleteMessage,
   };
 };
