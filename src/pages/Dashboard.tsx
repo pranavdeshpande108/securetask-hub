@@ -302,52 +302,6 @@ const Dashboard = () => {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <>
-                <Button
-                  variant={showUserList ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => { setShowUserList(!showUserList); setSelectedUser(null); }}
-                >
-                  <List className="mr-2 h-4 w-4" />
-                  {showUserList ? 'Hide Users' : 'View Users'}
-                </Button>
-                <Button variant="default" size="sm" onClick={() => setAssignDialogOpen(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Assign Task</span>
-                  <span className="sm:hidden">Assign</span>
-                </Button>
-              </>
-            )}
-            {isAdmin ? (
-              <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                For Myself
-              </Button>
-            ) : (
-              <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Task
-              </Button>
-            )}
-          </div>
-        </div>
-        {/* Clock, Calendar & Chat Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <ClockCalendarWidget />
-          <ChatSection />
-        </div>
-
-        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">
-              {isAdmin ? 'All Users Tasks' : 'Your Tasks'}
-            </h2>
-            <p className="text-muted-foreground">
-              {isAdmin ? 'Manage tasks for all users across the system' : 'Manage your personal tasks'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isAdmin && (
               <Button
                 variant={showUserList ? 'default' : 'outline'}
                 size="sm"
