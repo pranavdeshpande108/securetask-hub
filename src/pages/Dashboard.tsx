@@ -2,22 +2,21 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, LogOut, Trash2, Edit2, Search, Filter, Moon, Sun, User, Users, UserPlus, List, Lock, MessageSquare } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit2, Search, Filter, User, Users, UserPlus, List, Lock, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TaskDialog } from '@/components/TaskDialog';
 import { TaskAssignmentDialog } from '@/components/TaskAssignmentDialog';
 import { UserListView } from '@/components/UserListView';
 import { UserPerformanceView } from '@/components/UserPerformanceView';
-import { NotificationBell } from '@/components/NotificationBell';
 import { ClockCalendarWidget } from '@/components/ClockCalendarWidget';
 import { ChatSection } from '@/components/ChatSection';
+import { AppLayout } from '@/components/AppLayout';
 
 interface Task {
   id: string;
@@ -43,9 +42,8 @@ interface SelectedUser {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { role, isAdmin, isLoading: roleLoading } = useUserRole();
-  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -285,24 +283,33 @@ const Dashboard = () => {
     : [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <header className="border-b bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold">
-              {isAdmin ? 'Admin Dashboard' : 'Task Manager'}
-            </h1>
-            <Badge variant={isAdmin ? 'default' : 'outline'} className="capitalize">
-              {role}
-            </Badge>
+    <AppLayout>
+      <div className="container mx-auto px-4 py-8">
+        {/* Clock, Calendar & Chat Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <ClockCalendarWidget />
+          <ChatSection />
+        </div>
+
+        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold mb-2">
+              {isAdmin ? 'All Users Tasks' : 'Your Tasks'}
+            </h2>
+            <p className="text-muted-foreground">
+              {isAdmin ? 'Manage tasks for all users across the system' : 'Manage your personal tasks'}
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2">
             {isAdmin && (
               <>
-                <Button variant="outline" size="sm" onClick={() => navigate('/user-management')}>
-                  <Users className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Manage Users</span>
-                  <span className="sm:hidden">Users</span>
+                <Button
+                  variant={showUserList ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => { setShowUserList(!showUserList); setSelectedUser(null); }}
+                >
+                  <List className="mr-2 h-4 w-4" />
+                  {showUserList ? 'Hide Users' : 'View Users'}
                 </Button>
                 <Button variant="default" size="sm" onClick={() => setAssignDialogOpen(true)}>
                   <UserPlus className="mr-2 h-4 w-4" />
@@ -311,22 +318,19 @@ const Dashboard = () => {
                 </Button>
               </>
             )}
-            <span className="text-sm text-muted-foreground hidden md:inline">
-              {user?.email}
-            </span>
-            <NotificationBell />
-            <Button variant="ghost" size="icon" onClick={toggleTheme}>
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </Button>
-            <Button variant="outline" size="sm" onClick={signOut}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+            {isAdmin ? (
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                For Myself
+              </Button>
+            ) : (
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Task
+              </Button>
+            )}
           </div>
         </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
         {/* Clock, Calendar & Chat Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <ClockCalendarWidget />
@@ -582,21 +586,21 @@ const Dashboard = () => {
             ))}
           </div>
         )}
-      </main>
 
-      <TaskDialog
-        open={dialogOpen}
-        onOpenChange={handleDialogClose}
-        onTaskSaved={handleTaskSaved}
-        task={editingTask}
-      />
+        <TaskDialog
+          open={dialogOpen}
+          onOpenChange={handleDialogClose}
+          onTaskSaved={handleTaskSaved}
+          task={editingTask}
+        />
 
-      <TaskAssignmentDialog
-        open={assignDialogOpen}
-        onOpenChange={setAssignDialogOpen}
-        onSuccess={fetchTasks}
-      />
-    </div>
+        <TaskAssignmentDialog
+          open={assignDialogOpen}
+          onOpenChange={setAssignDialogOpen}
+          onSuccess={fetchTasks}
+        />
+      </div>
+    </AppLayout>
   );
 };
 

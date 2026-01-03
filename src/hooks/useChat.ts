@@ -67,10 +67,56 @@ export const useChat = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [profileEnsured, setProfileEnsured] = useState(false);
+
+  // Ensure user profile exists before any operations
+  const ensureProfile = useCallback(async () => {
+    if (!user || profileEnsured) return true;
+
+    try {
+      // Check if profile exists
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('Error checking profile:', checkError);
+        return false;
+      }
+
+      // If profile doesn't exist, create it
+      if (!existingProfile) {
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            email: user.email || '',
+            full_name: user.user_metadata?.full_name || null,
+          });
+
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+          return false;
+        }
+      }
+
+      setProfileEnsured(true);
+      return true;
+    } catch (error) {
+      console.error('Error ensuring profile:', error);
+      return false;
+    }
+  }, [user, profileEnsured]);
 
   // Update user presence
   const updatePresence = useCallback(async (isOnline: boolean, typingTo: string | null = null) => {
     if (!user) return;
+
+    // Ensure profile exists first
+    const profileOk = await ensureProfile();
+    if (!profileOk) return;
 
     try {
       const { error } = await supabase
@@ -86,7 +132,7 @@ export const useChat = () => {
     } catch (error) {
       console.error('Error updating presence:', error);
     }
-  }, [user]);
+  }, [user, ensureProfile]);
 
   // Set typing status
   const setTypingStatus = useCallback((typing: boolean) => {
@@ -364,6 +410,17 @@ export const useChat = () => {
   const sendMessage = async (message: string, file?: File, expiresInMinutes?: number) => {
     if (!user || !selectedUser) return;
     if (!message.trim() && !file) return;
+
+    // Ensure profile exists first
+    const profileOk = await ensureProfile();
+    if (!profileOk) {
+      toast({
+        title: 'Error',
+        description: 'Failed to initialize your profile. Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     // Check if user is blocked
     if (blockedUsers.includes(selectedUser)) {
