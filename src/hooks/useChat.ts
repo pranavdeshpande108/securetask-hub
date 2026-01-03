@@ -745,8 +745,11 @@ export const useChat = () => {
           schema: 'public',
           table: 'chat_messages',
         },
-        () => {
-          fetchMessages();
+        (payload) => {
+          const oldMessage = payload.old as { id: string };
+          if (oldMessage && oldMessage.id) {
+              setMessages((prev) => prev.filter((m) => m.id !== oldMessage.id));
+          }
         }
       )
       .subscribe();

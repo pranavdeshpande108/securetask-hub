@@ -24,7 +24,7 @@ export const ImagePreviewModal = ({ isOpen, onClose, imageUrl }: ImagePreviewMod
           <Button className="absolute top-0 right-0 m-4 rounded-full z-10" variant="default" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
-          <img src={imageUrl} alt="Preview" className="max-h-[60vh] max-w-[60vw] object-contain rounded-lg" />
+          <img src={imageUrl} alt="Preview" className="max-h-[60vh] max-w-[60vw] object-contain rounded-lg" onContextMenu={(e) => e.preventDefault()} draggable={false} />
         </div>
       </DialogContent>
     </Dialog>

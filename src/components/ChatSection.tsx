@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { ImagePreviewModal } from "./ImagePreviewModal";
 import { useAuth } from '@/contexts/AuthContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2, Copy, Trash2, Share2, MoreHorizontal, Smile } from 'lucide-react';
+import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2, Copy, Trash2, Share2, MoreHorizontal, Smile, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const ChatSection = () => {

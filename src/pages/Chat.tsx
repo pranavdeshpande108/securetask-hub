@@ -723,6 +723,8 @@ const Chat = () => {
                                     src={msg.file_url}
                                     alt="attachment"
                                     className="max-w-full max-h-60 object-cover"
+                                    onContextMenu={(e) => e.preventDefault()}
+                                    draggable={false}
                                   />
                                 </button>
                               ) : (
@@ -778,14 +780,7 @@ const Chat = () => {
                                         <Copy className="h-3 w-3 mr-2" /> Copy Text
                                       </DropdownMenuItem>
                                     )}
-                                    {msg.file_url && isImageFile(msg.file_type) && (
-                                      <DropdownMenuItem onClick={() => {
-                                        navigator.clipboard.writeText(msg.file_url!);
-                                        toast({ title: "Image URL copied!" });
-                                      }}>
-                                        <Copy className="h-3 w-3 mr-2" /> Copy Image URL
-                                      </DropdownMenuItem>
-                                    )}
+                                    
                                     {isOwn && (
                                       <>
                                         <DropdownMenuSeparator />
@@ -960,7 +955,7 @@ const Chat = () => {
                       onClick={() => openImage(item.url)}
                       className="aspect-square rounded-lg overflow-hidden bg-muted hover:opacity-80 transition-opacity p-0.5"
                     >
-                      <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                      <img src={item.url} alt={item.name} className="w-full h-full object-cover" onContextMenu={(e) => e.preventDefault()} draggable={false} />
                     </button>
                   ))}
                 </div>
@@ -1167,7 +1162,7 @@ const Chat = () => {
                       </div>
                     )}
                     {messageToForward.file_url && isImageFile(messageToForward.file_type) && (
-                       <img src={messageToForward.file_url} alt="attachment" className="max-w-full max-h-60 object-cover rounded-lg mb-2" />
+                       <img src={messageToForward.file_url} alt="attachment" className="max-w-full max-h-60 object-cover rounded-lg mb-2" onContextMenu={(e) => e.preventDefault()} draggable={false} />
                     )}
                     <p className="text-sm text-foreground whitespace-pre-wrap">
                       {messageToForward.message}
