@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useChat } from '@/hooks/useChat';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -41,9 +40,6 @@ import {
   X, 
   FileIcon, 
   Image as ImageIcon,
-  Moon,
-  Sun,
-  LogOut,
   Loader2,
   MoreVertical,
   Ban,
@@ -67,7 +63,8 @@ import {
   Link as LinkIcon,
   FileText,
   Download,
-  ExternalLink
+  ExternalLink,
+  Home
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -84,8 +81,7 @@ const CALENDAR_DATES = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const Chat = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
   const { toast } = useToast();
   const {
     messages,
@@ -397,6 +393,14 @@ const Chat = () => {
         {/* Current User Section */}
         <div className="p-4 md:p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => navigate('/dashboard')}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Home className="h-5 w-5" />
+            </Button>
             <div className="relative">
               <Avatar className="h-10 w-10">
                 <AvatarImage src="" />
@@ -407,13 +411,13 @@ const Chat = () => {
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-card rounded-full"></span>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-foreground truncate max-w-[120px]">
+              <h3 className="text-sm font-semibold text-foreground truncate max-w-[100px]">
                  {user?.email?.split('@')[0] || "User"}
               </h3>
               <p className="text-xs text-muted-foreground">Online</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="text-muted-foreground">
+          <Button variant="ghost" size="icon" className="text-muted-foreground" onClick={() => navigate('/availability')}>
             <Settings className="h-5 w-5" />
           </Button>
         </div>
@@ -899,15 +903,6 @@ const Chat = () => {
         </Tabs>
       </div>
 
-      {/* Floating Action Button for Theme */}
-      <div className="fixed bottom-6 left-6 z-50">
-        <Button 
-          onClick={toggleTheme} 
-          className="h-12 w-12 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg"
-        >
-          {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
-        </Button>
-      </div>
 
       {/* Dialogs */}
       <Dialog open={showImageModal} onOpenChange={(open) => { if (!open) { setShowImageModal(false); setModalImageUrl(null); } }}>

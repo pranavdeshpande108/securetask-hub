@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Users, Shield, User, ArrowLeft, Moon, Sun, LogOut, Trash2, UserPlus } from 'lucide-react';
+import { Loader2, Users, Shield, User, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { AppLayout } from '@/components/AppLayout';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,9 +37,8 @@ interface UserProfile {
 
 const UserManagement = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { isAdmin, isLoading: roleLoading } = useUserRole();
-  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -207,35 +206,8 @@ const UserManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <header className="border-b bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="text-2xl font-bold">User Management</h1>
-            <Badge variant="default">
-              <Shield className="mr-1 h-3 w-3" />
-              Admin
-            </Badge>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground hidden sm:inline">
-              {user?.email}
-            </span>
-            <Button variant="ghost" size="icon" onClick={toggleTheme}>
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </Button>
-            <Button variant="outline" size="sm" onClick={signOut}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
+    <AppLayout>
+      <div className="container mx-auto px-4 py-8">
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
             <Users className="h-6 w-6 text-primary" />
@@ -350,8 +322,8 @@ const UserManagement = () => {
             })}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 };
 

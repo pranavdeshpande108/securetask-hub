@@ -12,6 +12,8 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import UserManagement from "./pages/UserManagement";
 import Chat from "./pages/Chat";
+import Meetings from "./pages/Meetings";
+import Availability from "./pages/Availability";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +51,22 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Chat />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/meetings"
+                element={
+                  <ProtectedRoute>
+                    <Meetings />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/availability"
+                element={
+                  <ProtectedRoute>
+                    <Availability />
                   </ProtectedRoute>
                 }
               />
