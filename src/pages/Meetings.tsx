@@ -78,37 +78,55 @@ const Meetings = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // Fetch meetings where user is creator or participant
-      const { data: meetingsData, error } = await supabase
+      // Fetch meetings first to avoid complex join issues
+      const { data: meetingsData, error: meetingsError } = await supabase
         .from('meetings')
         .select('*')
         .order('meeting_date', { ascending: false });
 
-      if (error) throw error;
+      if (meetingsError) throw meetingsError;
 
-      // Fetch participants and minutes for each meeting
-      const enrichedMeetings = await Promise.all(
-        (meetingsData || []).map(async (meeting) => {
-          const { data: participants } = await supabase
-            .from('meeting_participants')
-            .select('user_id, attended, profiles:profiles(full_name, email)')
-            .eq('meeting_id', meeting.id);
+      if (!meetingsData || meetingsData.length === 0) {
+        setMeetings([]);
+        setLoading(false);
+        return;
+      }
 
-          const { data: minutes } = await supabase
-            .from('meeting_minutes')
-            .select('*')
-            .eq('meeting_id', meeting.id)
-            .order('created_at', { ascending: false });
+      const meetingIds = meetingsData.map((m) => m.id);
 
-          return {
-            ...meeting,
-            participants: participants || [],
-            minutes: minutes || [],
-          };
-        })
-      );
+      // Fetch participants separately
+      const { data: participantsData, error: participantsError } = await supabase
+        .from('meeting_participants')
+        .select('meeting_id, user_id, attended, profiles(full_name, email)')
+        .in('meeting_id', meetingIds);
 
-      setMeetings(enrichedMeetings);
+      if (participantsError) throw participantsError;
+
+      // Fetch minutes separately
+      const { data: minutesData, error: minutesError } = await supabase
+        .from('meeting_minutes')
+        .select('*')
+        .in('meeting_id', meetingIds)
+        .order('created_at', { ascending: false });
+
+      if (minutesError) throw minutesError;
+
+      // Transform data to match interface and sort minutes
+      const formattedMeetings = meetingsData.map((meeting: any) => ({
+        ...meeting,
+        participants: participantsData
+          ?.filter((p) => p.meeting_id === meeting.id)
+          .map((p: any) => ({
+            user_id: p.user_id,
+            attended: p.attended,
+            profiles: p.profiles,
+          })) || [],
+        minutes: (minutesData?.filter((m) => m.meeting_id === meeting.id) || []).sort((a: any, b: any) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ),
+      }));
+
+      setMeetings(formattedMeetings);
     } catch (error) {
       console.error('Error fetching meetings:', error);
       toast({ title: 'Error', description: 'Failed to load meetings', variant: 'destructive' });
@@ -139,7 +157,12 @@ const Meetings = () => {
 
     setCreating(true);
     try {
-      const meetingDateTime = new Date(`${newMeeting.meeting_date}T${newMeeting.meeting_time}`);
+      const dateTimeString = `${newMeeting.meeting_date}T${newMeeting.meeting_time}`;
+      const meetingDateTime = new Date(dateTimeString);
+      
+      if (isNaN(meetingDateTime.getTime())) {
+        throw new Error('Invalid date or time');
+      }
 
       const { data: meeting, error } = await supabase
         .from('meetings')
@@ -156,21 +179,26 @@ const Meetings = () => {
       if (error) throw error;
 
       // Add participants
-      if (newMeeting.participants.length > 0 && meeting) {
-        const participantInserts = newMeeting.participants.map((userId) => ({
+      const participantsToAdd = [...newMeeting.participants];
+      // Ensure creator is included
+      if (!participantsToAdd.includes(user.id)) {
+        participantsToAdd.push(user.id);
+      }
+
+      if (participantsToAdd.length > 0 && meeting) {
+        const participantInserts = participantsToAdd.map((userId) => ({
           meeting_id: meeting.id,
           user_id: userId,
         }));
 
-        await supabase.from('meeting_participants').insert(participantInserts);
-      }
-
-      // Add creator as participant
-      if (meeting) {
-        await supabase.from('meeting_participants').insert({
-          meeting_id: meeting.id,
-          user_id: user.id,
-        });
+        const { error: participantError } = await supabase
+          .from('meeting_participants')
+          .insert(participantInserts);
+          
+        if (participantError) {
+           console.error('Error adding participants:', participantError);
+           toast({ title: 'Warning', description: 'Meeting created but failed to add some participants', variant: 'warning' });
+        }
       }
 
       toast({ title: 'Success', description: 'Meeting created successfully' });

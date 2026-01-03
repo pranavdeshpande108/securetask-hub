@@ -10,8 +10,10 @@ import { useChat } from '@/hooks/useChat';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ImagePreviewModal } from "./ImagePreviewModal";
 import { useAuth } from '@/contexts/AuthContext';
-import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2, Copy, Trash2, Share2, MoreHorizontal } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2, Copy, Trash2, Share2, MoreHorizontal, Smile } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const ChatSection = () => {
@@ -27,6 +29,8 @@ export const ChatSection = () => {
     uploading,
     totalUnread,
     deleteMessage,
+    addReaction,
+    removeReaction,
   } = useChat();
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState('');
@@ -160,6 +164,29 @@ export const ChatSection = () => {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          const MAX = 100 * 1024 * 1024; // 100MB
+          if (file.size > MAX) {
+            toast({
+              title: 'File too large',
+              description: 'Pasted file size must be 100MB or less.',
+              variant: 'destructive',
+            });
+            return;
+          }
+          setSelectedFile(file);
+          break; 
+        }
+      }
+    }
+  };
+
   const getInitials = (name: string | null, email: string) => {
     if (name) {
       return name
@@ -281,101 +308,165 @@ export const ChatSection = () => {
                 ) : (
                   messages.map((msg) => {
                     const isOwn = msg.sender_id === user?.id;
+
+                    const handleReaction = (messageId: string, reaction: string) => {
+                      const existingReaction = messages
+                        .find(m => m.id === messageId)
+                        ?.reactions?.find(r => r.user_id === user?.id && r.reaction === reaction);
+
+                      if (existingReaction) {
+                        removeReaction(messageId, reaction);
+                      } else {
+                        addReaction(messageId, reaction);
+                      }
+                    };
+                    
+                    const reactionsSummary = (msg.reactions || []).reduce((acc, r) => {
+                      acc[r.reaction] = (acc[r.reaction] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>);
+
                     return (
                       <div
                         key={msg.id}
-                        className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                        className={`group flex w-full ${isOwn ? 'justify-end' : 'justify-start'}`}
                       >
-                        <div
-                          className={`relative max-w-[75%] rounded-2xl px-4 py-2 ${
-                            isOwn
-                              ? 'bg-primary text-primary-foreground rounded-br-sm'
-                              : 'bg-muted rounded-bl-sm'
-                          }`}
-                        >
-                          {msg.file_url && (
-                            <div className="mb-2">
-                              {isImageFile(msg.file_type) ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => openImage(msg.file_url!)}
-                                    onContextMenu={(e) => e.preventDefault()}
-                                    className="p-0 bg-transparent border-0"
-                                  >
-                                    <img
-                                      src={msg.file_url}
-                                      alt={msg.file_name || 'Image'}
-                                      className="max-w-full rounded-lg max-h-40 object-cover select-none"
-                                      draggable={false}
-                                      onDragStart={(e) => e.preventDefault()}
-                                    />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => openFile(msg.file_url!, msg.file_name, msg.file_type)}
-                                  onContextMenu={(e) => e.preventDefault()}
-                                  className={`flex items-center gap-2 p-2 rounded-lg ${
-                                    isOwn ? 'bg-primary-foreground/10' : 'bg-background'
-                                  }`}
-                                >
-                                  <FileIcon className="h-4 w-4 shrink-0" />
-                                  <span className="text-xs truncate">{msg.file_name}</span>
-                                </button>
-                              )} 
-                            </div>
+                        <div className="flex items-end gap-2 max-w-[85%]">
+                          {!isOwn && (
+                             <Avatar className="h-8 w-8">
+                               <AvatarFallback>{getInitials(selectedUserData?.full_name || null, selectedUserData?.email || '')}</AvatarFallback>
+                             </Avatar>
                           )}
-                          {msg.message && !msg.message.startsWith('Sent a file:') && (
-                            <p className="text-sm break-words">{msg.message}</p>
-                          )}
-                          <p
-                            className={`text-xs mt-1 ${
-                              isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                          <div
+                            className={`relative flex flex-col rounded-2xl ${
+                              isOwn
+                                ? 'bg-primary text-primary-foreground rounded-br-sm'
+                                : 'bg-muted rounded-bl-sm'
                             }`}
                           >
-                            {format(new Date(msg.created_at), 'h:mm a')}
-                          </p>
+                            <div className="px-4 py-2">
+                              {msg.file_url && (
+                                <div className="mb-2">
+                                  {isImageFile(msg.file_type) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openImage(msg.file_url!)}
+                                      onContextMenu={(e) => e.preventDefault()}
+                                      className="p-0.5 bg-transparent border-0 rounded-lg"
+                                    >
+                                      <img
+                                        src={msg.file_url}
+                                        alt={msg.file_name || 'Image'}
+                                        className="max-w-full max-h-40 object-cover select-none"
+                                        draggable={false}
+                                        onDragStart={(e) => e.preventDefault()}
+                                      />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => openFile(msg.file_url!, msg.file_name, msg.file_type)}
+                                      onContextMenu={(e) => e.preventDefault()}
+                                      className={`flex items-center gap-2 p-2 rounded-lg ${
+                                        isOwn ? 'bg-primary-foreground/10' : 'bg-background'
+                                      }`}
+                                    >
+                                      <FileIcon className="h-4 w-4 shrink-0" />
+                                      <span className="text-xs truncate">{msg.file_name}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              {msg.message && !msg.message.startsWith('Sent a file:') && (
+                                <p className="text-sm break-words">{msg.message}</p>
+                              )}
+                              <p
+                                className={`text-xs mt-1 ${
+                                  isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                                }`}
+                              >
+                                {format(new Date(msg.created_at), 'h:mm a')}
+                              </p>
+                            </div>
 
-                          <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="icon" variant="ghost" className="p-1">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
-                                <DropdownMenuItem onClick={async () => {
-                                  if (msg.message) {
-                                    await navigator.clipboard.writeText(msg.message);
-                                    toast({ title: 'Copied', description: 'Message copied to clipboard' });
-                                  }
-                                }}>
-                                  <Copy className="mr-2 h-3.5 w-3.5" />
-                                  Copy
-                                </DropdownMenuItem>
-                                {msg.file_url && (
+                            {/* Reactions Display */}
+                            {Object.keys(reactionsSummary).length > 0 && (
+                              <div className="flex gap-1 px-2 pb-1 -mt-2">
+                                {Object.entries(reactionsSummary).map(([emoji, count]) => (
+                                  <Badge
+                                    key={emoji}
+                                    variant={isOwn ? 'secondary' : 'outline'}
+                                    className="cursor-pointer"
+                                    onClick={() => handleReaction(msg.id, emoji)}
+                                  >
+                                    {emoji} {count > 1 ? count : ''}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Hover Actions */}
+                            <div className={`absolute top-0 flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10 ${isOwn ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'}`}>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button size="icon" variant="ghost" className="p-1 h-6 w-6">
+                                    <Smile className="h-4 w-4" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-1">
+                                  <div className="flex gap-1">
+                                    {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+                                      <Button
+                                        key={emoji}
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleReaction(msg.id, emoji)}
+                                        className="h-8 w-8 text-lg rounded-full"
+                                      >
+                                        {emoji}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="icon" variant="ghost" className="p-1 h-6 w-6">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
                                   <DropdownMenuItem onClick={async () => {
-                                    await navigator.clipboard.writeText(msg.file_url!);
-                                    toast({ title: 'Copied', description: 'File URL copied to clipboard' });
+                                    if (msg.message) {
+                                      await navigator.clipboard.writeText(msg.message);
+                                      toast({ title: 'Copied', description: 'Message copied to clipboard' });
+                                    }
                                   }}>
-                                    <Share2 className="mr-2 h-3.5 w-3.5" />
-                                    Copy file link
+                                    <Copy className="mr-2 h-3.5 w-3.5" />
+                                    Copy
                                   </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                                {isOwn && (
-                                  <DropdownMenuItem onClick={async () => {
-                                    if (!confirm('Delete this message?')) return;
-                                    await deleteMessage(msg.id);
-                                  }} className="text-destructive">
-                                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                  {msg.file_url && (
+                                    <DropdownMenuItem onClick={async () => {
+                                      await navigator.clipboard.writeText(msg.file_url!);
+                                      toast({ title: 'Copied', description: 'File URL copied to clipboard' });
+                                    }}>
+                                      <Share2 className="mr-2 h-3.5 w-3.5" />
+                                      Copy file link
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  {isOwn && (
+                                    <DropdownMenuItem onClick={async () => {
+                                      if (!confirm('Delete this message?')) return;
+                                      await deleteMessage(msg.id);
+                                    }} className="text-destructive">
+                                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -427,6 +518,7 @@ export const ChatSection = () => {
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
+                  onPaste={handlePaste}
                   placeholder="Type a message..."
                   className="flex-1 rounded-full bg-background border-border/50 focus-visible:ring-primary h-9"
                   disabled={uploading}
@@ -446,20 +538,11 @@ export const ChatSection = () => {
               </div>
             </div>
 
-            {/* Image preview dialog (prevents opening image in new tab/window) */}
-            <Dialog open={showImageModal} onOpenChange={(open) => { if (!open) { setShowImageModal(false); setModalImageUrl(null); } }}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Image preview</DialogTitle>
-                </DialogHeader>
-                <div className="max-h-[80vh] flex items-center justify-center">
-                  <img src={modalImageUrl || ''} alt="Preview" className="max-h-[80vh] max-w-full object-contain" draggable={false} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => { setShowImageModal(false); setModalImageUrl(null); }}>Close</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <ImagePreviewModal
+              isOpen={showImageModal}
+              onClose={() => setShowImageModal(false)}
+              imageUrl={modalImageUrl}
+            />
 
             {/* File preview modal */}
             <Dialog open={showFileModal} onOpenChange={(open) => { if (!open) { setShowFileModal(false); setModalFileUrl(null); setModalFileName(null); setModalFileType(null); } }}>

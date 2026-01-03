@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-interface ChatMessage {
+export interface ChatMessage {
   id: string;
   sender_id: string;
   receiver_id: string;
@@ -406,6 +406,53 @@ export const useChat = () => {
     }
   };
 
+  const forwardMessage = async (originalMessage: ChatMessage, recipientIds: string[]) => {
+    if (!user) return;
+
+    try {
+      const messagesToInsert = recipientIds.map(recipientId => {
+        const fileInfo = originalMessage.file_url 
+            ? { 
+                message: `Forwarded file: ${originalMessage.file_name}`,
+                file_url: originalMessage.file_url,
+                file_name: originalMessage.file_name,
+                file_type: originalMessage.file_type
+              }
+            : {
+                message: originalMessage.message ? `Forwarded: \n"${originalMessage.message}"` : 'Forwarded message',
+                file_url: null,
+                file_name: null,
+                file_type: null
+            };
+
+        return {
+          sender_id: user.id,
+          receiver_id: recipientId,
+          ...fileInfo,
+        };
+      });
+
+      if (messagesToInsert.length === 0) return;
+
+      const { error } = await supabase.from('chat_messages').insert(messagesToInsert);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Message Forwarded',
+        description: `Successfully forwarded the message to ${recipientIds.length} user(s).`,
+      });
+
+    } catch (error) {
+      console.error('Error forwarding message:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to forward message',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Send a message with optional file and disappearing option
   const sendMessage = async (message: string, file?: File, expiresInMinutes?: number) => {
     if (!user || !selectedUser) return;
@@ -473,19 +520,17 @@ export const useChat = () => {
   // Add reaction to message
   const addReaction = async (messageId: string, reaction: string) => {
     if (!user) return;
-
+    
     try {
+      // The realtime subscription will handle the UI update
       const { error } = await supabase
         .from('message_reactions')
-        .insert({
-          message_id: messageId,
-          user_id: user.id,
-          reaction,
-        });
+        .insert({ message_id: messageId, user_id: user.id, reaction });
 
       if (error && error.code !== '23505') throw error; // Ignore duplicate error
     } catch (error) {
       console.error('Error adding reaction:', error);
+      toast({ title: 'Error', description: 'Failed to add reaction.', variant: 'destructive' });
     }
   };
 
@@ -494,6 +539,7 @@ export const useChat = () => {
     if (!user) return;
 
     try {
+      // The realtime subscription will handle the UI update
       const { error } = await supabase
         .from('message_reactions')
         .delete()
@@ -504,6 +550,7 @@ export const useChat = () => {
       if (error) throw error;
     } catch (error) {
       console.error('Error removing reaction:', error);
+      toast({ title: 'Error', description: 'Failed to remove reaction.', variant: 'destructive' });
     }
   };
 
@@ -722,8 +769,28 @@ export const useChat = () => {
           schema: 'public',
           table: 'message_reactions',
         },
-        () => {
-          fetchMessages();
+        (payload) => {
+          // Instead of fetchMessages(), update state locally
+          if (payload.eventType === 'INSERT') {
+            const newReaction = payload.new as MessageReaction;
+            setMessages(prevMessages => prevMessages.map(msg => {
+              if (msg.id === newReaction.message_id) {
+                // Add reaction if it doesn't exist
+                if (!msg.reactions?.find(r => r.id === newReaction.id)) {
+                  return { ...msg, reactions: [...(msg.reactions || []), newReaction] };
+                }
+              }
+              return msg;
+            }));
+          } else if (payload.eventType === 'DELETE') {
+            const oldReaction = payload.old as {id: string, message_id: string};
+            setMessages(prevMessages => prevMessages.map(msg => {
+              if (msg.id === oldReaction.message_id) {
+                return { ...msg, reactions: (msg.reactions || []).filter(r => r.id !== oldReaction.id) };
+              }
+              return msg;
+            }));
+          }
         }
       )
       .subscribe();
@@ -837,5 +904,7 @@ export const useChat = () => {
     searchQuery,
     setSearchQuery,
     deleteMessage,
+    forwardMessage,
   };
 };
+
