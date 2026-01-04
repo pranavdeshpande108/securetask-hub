@@ -534,30 +534,24 @@ export const useChat = () => {
     }
   };
 
-  // Remove reaction from message
-  const removeReaction = async (messageId: string, reaction: string) => {
+  // Remove reaction from message (by reaction id)
+  const removeReaction = async (reactionId: string) => {
     if (!user) return;
 
     try {
       // Optimistically update UI first
-      setMessages(prevMessages => prevMessages.map(msg => {
-        if (msg.id === messageId) {
-          return {
-            ...msg,
-            reactions: (msg.reactions || []).filter(
-              r => !(r.user_id === user.id && r.reaction === reaction)
-            )
-          };
-        }
-        return msg;
-      }));
+      setMessages(prevMessages =>
+        prevMessages.map(msg => ({
+          ...msg,
+          reactions: (msg.reactions || []).filter(r => r.id !== reactionId),
+        }))
+      );
 
       const { error } = await supabase
         .from('message_reactions')
         .delete()
-        .eq('message_id', messageId)
-        .eq('user_id', user.id)
-        .eq('reaction', reaction);
+        .eq('id', reactionId)
+        .eq('user_id', user.id);
 
       if (error) {
         // Revert on error - refetch messages
