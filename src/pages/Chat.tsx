@@ -712,17 +712,17 @@ const Chat = () => {
                            
                            {/* Attachments */}
                            {msg.file_url && (
-                            <div className="mb-2">
+                            <div className={`${isImageFile(msg.file_type) ? '-mx-4 -mt-3 mb-2' : 'mb-2'}`}>
                               {isImageFile(msg.file_type) ? (
                                 <button
                                   type="button"
                                   onClick={() => openImage(msg.file_url!)}
-                                  className="block overflow-hidden rounded-lg p-0.5"
+                                  className={`block w-full overflow-hidden ${isOwn ? 'rounded-t-[12px] rounded-tr-none' : 'rounded-t-[12px] rounded-tl-none'}`}
                                 >
                                   <img
                                     src={msg.file_url}
                                     alt="attachment"
-                                    className="max-w-full max-h-60 object-cover"
+                                    className="w-full max-h-[300px] object-cover hover:opacity-95 transition-opacity"
                                     onContextMenu={(e) => e.preventDefault()}
                                     draggable={false}
                                   />
@@ -732,12 +732,13 @@ const Chat = () => {
                                   type="button"
                                   onClick={() => openFile(msg.file_url!, msg.file_name, msg.file_type)}
                                   onContextMenu={(e) => e.preventDefault()}
-                                  className={`flex items-center gap-2 p-2 rounded-lg ${
+                                  className={`flex items-center gap-2 p-2 rounded-lg w-full ${
                                     isOwn ? 'bg-primary-foreground/10' : 'bg-card'
                                   }`}
                                 >
-                                  <FileIcon className="h-4 w-4" />
-                                  <span className="truncate">{msg.file_name || 'File'}</span>
+                                  <FileIcon className="h-4 w-4 shrink-0" />
+                                  <span className="truncate text-sm flex-1 text-left">{msg.file_name || 'File'}</span>
+                                  <Download className="h-4 w-4 shrink-0 opacity-60" />
                                 </button>
                               )}
                             </div>

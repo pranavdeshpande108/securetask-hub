@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Dialog,
   DialogContent,
@@ -25,8 +26,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Calendar, Clock, Users, FileText, ChevronRight } from 'lucide-react';
+import { Loader2, Plus, Calendar, Clock, Users, FileText, ChevronRight, Copy, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Meeting {
@@ -37,8 +39,9 @@ interface Meeting {
   duration_minutes: number;
   created_by: string;
   created_at: string;
+  mom_taker?: string | null;
   participants?: { user_id: string; attended: boolean; profiles?: { full_name: string | null; email: string } }[];
-  minutes?: { id: string; content: string; recorded_by: string; created_at: string }[];
+  minutes?: { id: string; content: string; recorded_by: string; created_at: string; recorder?: { full_name: string | null; email: string } }[];
 }
 
 interface Profile {
@@ -58,6 +61,7 @@ const Meetings = () => {
   const [showMinutesDialog, setShowMinutesDialog] = useState(false);
   const [newMinutes, setNewMinutes] = useState('');
   const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
 
   // Form state for new meeting
   const [newMeeting, setNewMeeting] = useState({
@@ -67,6 +71,7 @@ const Meetings = () => {
     meeting_time: '',
     duration_minutes: 60,
     participants: [] as string[],
+    mom_taker: '',
   });
 
   useEffect(() => {
@@ -78,7 +83,6 @@ const Meetings = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // Fetch meetings first to avoid complex join issues
       const { data: meetingsData, error: meetingsError } = await supabase
         .from('meetings')
         .select('*')
@@ -94,7 +98,6 @@ const Meetings = () => {
 
       const meetingIds = meetingsData.map((m) => m.id);
 
-      // Fetch participants separately
       const { data: participantsData, error: participantsError } = await supabase
         .from('meeting_participants')
         .select('meeting_id, user_id, attended, profiles(full_name, email)')
@@ -102,16 +105,14 @@ const Meetings = () => {
 
       if (participantsError) throw participantsError;
 
-      // Fetch minutes separately
       const { data: minutesData, error: minutesError } = await supabase
         .from('meeting_minutes')
-        .select('*')
+        .select('*, profiles:recorded_by(full_name, email)')
         .in('meeting_id', meetingIds)
         .order('created_at', { ascending: false });
 
       if (minutesError) throw minutesError;
 
-      // Transform data to match interface and sort minutes
       const formattedMeetings = meetingsData.map((meeting: any) => ({
         ...meeting,
         participants: participantsData
@@ -121,7 +122,10 @@ const Meetings = () => {
             attended: p.attended,
             profiles: p.profiles,
           })) || [],
-        minutes: (minutesData?.filter((m) => m.meeting_id === meeting.id) || []).sort((a: any, b: any) => 
+        minutes: (minutesData?.filter((m) => m.meeting_id === meeting.id) || []).map((m: any) => ({
+          ...m,
+          recorder: m.profiles,
+        })).sort((a: any, b: any) => 
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         ),
       }));
@@ -140,8 +144,7 @@ const Meetings = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, full_name')
-        .neq('id', user.id);
+        .select('id, email, full_name');
       if (error) throw error;
       setProfiles(data || []);
     } catch (error) {
@@ -178,12 +181,8 @@ const Meetings = () => {
 
       if (error) throw error;
 
-      // Add participants
-      const participantsToAdd = [...newMeeting.participants];
-      // Ensure creator is included
-      if (!participantsToAdd.includes(user.id)) {
-        participantsToAdd.push(user.id);
-      }
+      // Add participants including creator
+      const participantsToAdd = [...new Set([...newMeeting.participants, user.id])];
 
       if (participantsToAdd.length > 0 && meeting) {
         const participantInserts = participantsToAdd.map((userId) => ({
@@ -196,8 +195,8 @@ const Meetings = () => {
           .insert(participantInserts);
           
         if (participantError) {
-           console.error('Error adding participants:', participantError);
-           toast({ title: 'Warning', description: 'Meeting created but failed to add some participants', variant: 'warning' });
+          console.error('Error adding participants:', participantError);
+          toast({ title: 'Warning', description: 'Meeting created but failed to add some participants', variant: 'destructive' });
         }
       }
 
@@ -210,6 +209,7 @@ const Meetings = () => {
         meeting_time: '',
         duration_minutes: 60,
         participants: [],
+        mom_taker: '',
       });
       fetchMeetings();
     } catch (error) {
@@ -245,7 +245,24 @@ const Meetings = () => {
     }
   };
 
+  const copyMeetingId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    toast({ title: 'Copied', description: 'Meeting ID copied to clipboard' });
+  };
+
   const isPastMeeting = (date: string) => new Date(date) < new Date();
+
+  const upcomingMeetings = meetings.filter(m => !isPastMeeting(m.meeting_date));
+  const pastMeetings = meetings.filter(m => isPastMeeting(m.meeting_date));
+
+  const getInitials = (name: string | null, email: string) => {
+    if (name) {
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    return email[0].toUpperCase();
+  };
+
+  const displayedMeetings = activeTab === 'upcoming' ? upcomingMeetings : pastMeetings;
 
   return (
     <AppLayout>
@@ -262,7 +279,7 @@ const Meetings = () => {
                 New Meeting
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Meeting</DialogTitle>
                 <DialogDescription>Schedule a new meeting with participants</DialogDescription>
@@ -307,7 +324,7 @@ const Meetings = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Duration (minutes)</Label>
+                  <Label htmlFor="duration">Duration</Label>
                   <Select
                     value={String(newMeeting.duration_minutes)}
                     onValueChange={(val) => setNewMeeting((prev) => ({ ...prev, duration_minutes: parseInt(val) }))}
@@ -327,12 +344,12 @@ const Meetings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Participants</Label>
-                  <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-[60px]">
-                    {profiles.map((profile) => (
+                  <div className="flex flex-wrap gap-2 p-3 border rounded-md min-h-[80px] bg-muted/30">
+                    {profiles.filter(p => p.id !== user?.id).map((profile) => (
                       <Badge
                         key={profile.id}
                         variant={newMeeting.participants.includes(profile.id) ? 'default' : 'outline'}
-                        className="cursor-pointer"
+                        className="cursor-pointer transition-colors"
                         onClick={() => {
                           setNewMeeting((prev) => ({
                             ...prev,
@@ -345,7 +362,33 @@ const Meetings = () => {
                         {profile.full_name || profile.email}
                       </Badge>
                     ))}
+                    {profiles.filter(p => p.id !== user?.id).length === 0 && (
+                      <span className="text-muted-foreground text-sm">No other users available</span>
+                    )}
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>MoM Note Taker (Optional)</Label>
+                  <Select
+                    value={newMeeting.mom_taker}
+                    onValueChange={(val) => setNewMeeting((prev) => ({ ...prev, mom_taker: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select person to take notes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No one assigned</SelectItem>
+                      {[...newMeeting.participants, user?.id].filter(Boolean).map((userId) => {
+                        const profile = profiles.find(p => p.id === userId);
+                        if (!profile) return null;
+                        return (
+                          <SelectItem key={userId} value={userId!}>
+                            {profile.full_name || profile.email}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <DialogFooter>
@@ -370,20 +413,28 @@ const Meetings = () => {
             {/* Meeting List */}
             <div className="lg:col-span-1">
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Your Meetings</CardTitle>
-                  <CardDescription>Select a meeting to view details</CardDescription>
+                <CardHeader className="pb-3">
+                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'upcoming' | 'past')}>
+                    <TabsList className="w-full">
+                      <TabsTrigger value="upcoming" className="flex-1">
+                        Upcoming ({upcomingMeetings.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="past" className="flex-1">
+                        Past ({pastMeetings.length})
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[500px]">
-                    {meetings.length === 0 ? (
+                    {displayedMeetings.length === 0 ? (
                       <div className="p-6 text-center text-muted-foreground">
                         <Calendar className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                        <p>No meetings yet</p>
+                        <p>No {activeTab} meetings</p>
                       </div>
                     ) : (
                       <div className="divide-y divide-border">
-                        {meetings.map((meeting) => (
+                        {displayedMeetings.map((meeting) => (
                           <div
                             key={meeting.id}
                             onClick={() => setSelectedMeeting(meeting)}
@@ -397,24 +448,35 @@ const Meetings = () => {
                                 <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                                   <Calendar className="h-3 w-3" />
                                   <span>{format(new Date(meeting.meeting_date), 'MMM d, yyyy')}</span>
-                                  <Clock className="h-3 w-3 ml-2" />
-                                  <span>{format(new Date(meeting.meeting_date), 'h:mm a')}</span>
                                 </div>
-                                <div className="flex items-center gap-2 mt-1">
-                                  {isPastMeeting(meeting.meeting_date) ? (
-                                    <Badge variant="secondary" className="text-xs">Past</Badge>
-                                  ) : (
-                                    <Badge variant="default" className="text-xs">Upcoming</Badge>
-                                  )}
+                                <div className="flex items-center gap-2 mt-0.5 text-sm text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  <span>{format(new Date(meeting.meeting_date), 'h:mm a')} • {meeting.duration_minutes}min</span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <div className="flex -space-x-2">
+                                    {meeting.participants?.slice(0, 3).map((p) => (
+                                      <Avatar key={p.user_id} className="h-6 w-6 border-2 border-background">
+                                        <AvatarFallback className="text-[10px] bg-muted">
+                                          {getInitials(p.profiles?.full_name || null, p.profiles?.email || '')}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                    ))}
+                                    {(meeting.participants?.length || 0) > 3 && (
+                                      <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium border-2 border-background">
+                                        +{(meeting.participants?.length || 0) - 3}
+                                      </div>
+                                    )}
+                                  </div>
                                   {meeting.minutes && meeting.minutes.length > 0 && (
-                                    <Badge variant="outline" className="text-xs">
+                                    <Badge variant="outline" className="text-xs ml-auto">
                                       <FileText className="h-3 w-3 mr-1" />
-                                      {meeting.minutes.length} notes
+                                      {meeting.minutes.length}
                                     </Badge>
                                   )}
                                 </div>
                               </div>
-                              <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                              <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
                             </div>
                           </div>
                         ))}
@@ -431,16 +493,29 @@ const Meetings = () => {
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle>{selectedMeeting.title}</CardTitle>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-xl">{selectedMeeting.title}</CardTitle>
                           <CardDescription className="mt-1">
                             {format(new Date(selectedMeeting.meeting_date), 'EEEE, MMMM d, yyyy')} at{' '}
                             {format(new Date(selectedMeeting.meeting_date), 'h:mm a')}
                           </CardDescription>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="outline" className="font-mono text-xs">
+                              ID: {selectedMeeting.id.slice(0, 8)}...
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => copyMeetingId(selectedMeeting.id)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                         {isPastMeeting(selectedMeeting.meeting_date) ? (
-                          <Badge variant="secondary">Past Meeting</Badge>
+                          <Badge variant="secondary">Past</Badge>
                         ) : (
                           <Badge variant="default">Upcoming</Badge>
                         )}
@@ -449,33 +524,49 @@ const Meetings = () => {
                     <CardContent className="space-y-4">
                       {selectedMeeting.description && (
                         <div>
-                          <h4 className="font-medium mb-1">Description</h4>
-                          <p className="text-muted-foreground">{selectedMeeting.description}</p>
+                          <h4 className="font-medium mb-1 text-sm">Description</h4>
+                          <p className="text-muted-foreground text-sm">{selectedMeeting.description}</p>
                         </div>
                       )}
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-muted-foreground" />
                           <span>{selectedMeeting.duration_minutes} minutes</span>
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
-                          <span>{(selectedMeeting.participants?.length || 0)} participants</span>
+                          <span>{selectedMeeting.participants?.length || 0} participants</span>
                         </div>
                       </div>
-                      {selectedMeeting.participants && selectedMeeting.participants.length > 0 && (
-                        <div>
-                          <h4 className="font-medium mb-2">Participants</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {selectedMeeting.participants.map((p) => (
-                              <Badge key={p.user_id} variant="outline">
-                                {p.profiles?.full_name || p.profiles?.email || 'Unknown'}
-                                {p.attended && <span className="ml-1 text-green-500">✓</span>}
-                              </Badge>
-                            ))}
-                          </div>
+                      
+                      {/* Participants section */}
+                      <div>
+                        <h4 className="font-medium mb-3 text-sm">Participants</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {selectedMeeting.participants?.map((p) => (
+                            <div
+                              key={p.user_id}
+                              className="flex items-center gap-2 p-2 rounded-lg bg-muted/50"
+                            >
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="text-xs">
+                                  {getInitials(p.profiles?.full_name || null, p.profiles?.email || '')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {p.profiles?.full_name || p.profiles?.email || 'Unknown'}
+                                </p>
+                                {p.attended && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                    <UserCheck className="h-2 w-2 mr-0.5" /> Attended
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      )}
+                      </div>
                     </CardContent>
                   </Card>
 
@@ -483,7 +574,7 @@ const Meetings = () => {
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                       <div>
-                        <CardTitle className="text-lg">Meeting Minutes</CardTitle>
+                        <CardTitle className="text-lg">Meeting Minutes (MoM)</CardTitle>
                         <CardDescription>Notes and key points from this meeting</CardDescription>
                       </div>
                       <Dialog open={showMinutesDialog} onOpenChange={setShowMinutesDialog}>
@@ -516,12 +607,22 @@ const Meetings = () => {
                     <CardContent>
                       {selectedMeeting.minutes && selectedMeeting.minutes.length > 0 ? (
                         <div className="space-y-4">
-                          {selectedMeeting.minutes.map((minute) => (
+                          {selectedMeeting.minutes.map((minute: any) => (
                             <div key={minute.id} className="p-4 bg-muted/50 rounded-lg">
-                              <p className="whitespace-pre-wrap">{minute.content}</p>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                Added on {format(new Date(minute.created_at), 'MMM d, yyyy h:mm a')}
-                              </p>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Avatar className="h-6 w-6">
+                                  <AvatarFallback className="text-[10px]">
+                                    {getInitials(minute.recorder?.full_name || null, minute.recorder?.email || '')}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs font-medium">
+                                  {minute.recorder?.full_name || minute.recorder?.email || 'Unknown'}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  • {format(new Date(minute.created_at), 'MMM d, yyyy h:mm a')}
+                                </span>
+                              </div>
+                              <p className="whitespace-pre-wrap text-sm">{minute.content}</p>
                             </div>
                           ))}
                         </div>
@@ -529,6 +630,7 @@ const Meetings = () => {
                         <div className="text-center py-8 text-muted-foreground">
                           <FileText className="h-12 w-12 mx-auto mb-2 opacity-20" />
                           <p>No minutes recorded yet</p>
+                          <p className="text-sm mt-1">Click "Add Notes" to record meeting minutes</p>
                         </div>
                       )}
                     </CardContent>

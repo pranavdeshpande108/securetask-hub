@@ -539,7 +539,19 @@ export const useChat = () => {
     if (!user) return;
 
     try {
-      // The realtime subscription will handle the UI update
+      // Optimistically update UI first
+      setMessages(prevMessages => prevMessages.map(msg => {
+        if (msg.id === messageId) {
+          return {
+            ...msg,
+            reactions: (msg.reactions || []).filter(
+              r => !(r.user_id === user.id && r.reaction === reaction)
+            )
+          };
+        }
+        return msg;
+      }));
+
       const { error } = await supabase
         .from('message_reactions')
         .delete()
@@ -547,7 +559,11 @@ export const useChat = () => {
         .eq('user_id', user.id)
         .eq('reaction', reaction);
 
-      if (error) throw error;
+      if (error) {
+        // Revert on error - refetch messages
+        fetchMessages();
+        throw error;
+      }
     } catch (error) {
       console.error('Error removing reaction:', error);
       toast({ title: 'Error', description: 'Failed to remove reaction.', variant: 'destructive' });
