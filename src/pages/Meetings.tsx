@@ -100,14 +100,14 @@ const Meetings = () => {
 
       const { data: participantsData, error: participantsError } = await supabase
         .from('meeting_participants')
-        .select('meeting_id, user_id, attended, profiles(full_name, email)')
+        .select('meeting_id, user_id, attended, profiles:profiles!meeting_participants_user_id_fkey(full_name, email)')
         .in('meeting_id', meetingIds);
 
       if (participantsError) throw participantsError;
 
       const { data: minutesData, error: minutesError } = await supabase
         .from('meeting_minutes')
-        .select('*, profiles:recorded_by(full_name, email)')
+        .select('id, meeting_id, content, recorded_by, created_at, profiles:profiles!meeting_minutes_recorded_by_fkey(full_name, email)')
         .in('meeting_id', meetingIds)
         .order('created_at', { ascending: false });
 
@@ -257,9 +257,16 @@ const Meetings = () => {
 
   const getInitials = (name: string | null, email: string) => {
     if (name) {
-      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      return name
+        .split(' ')
+        .filter(Boolean)
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
     }
-    return email[0].toUpperCase();
+
+    return (email?.trim()?.[0] || 'U').toUpperCase();
   };
 
   const displayedMeetings = activeTab === 'upcoming' ? upcomingMeetings : pastMeetings;

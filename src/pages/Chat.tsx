@@ -421,7 +421,7 @@ const Chat = () => {
     );
 
     if (existingReaction) {
-      removeReaction(messageId, reaction);
+      removeReaction(existingReaction.id);
     } else {
       addReaction(messageId, reaction);
     }

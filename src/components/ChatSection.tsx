@@ -315,7 +315,7 @@ export const ChatSection = () => {
                         ?.reactions?.find(r => r.user_id === user?.id && r.reaction === reaction);
 
                       if (existingReaction) {
-                        removeReaction(messageId, reaction);
+                        removeReaction(existingReaction.id);
                       } else {
                         addReaction(messageId, reaction);
                       }
