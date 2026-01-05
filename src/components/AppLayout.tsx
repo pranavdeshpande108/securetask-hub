@@ -15,7 +15,8 @@ import {
   Sun, 
   ListTodo,
   Calendar,
-  FileText
+  FileText,
+  UserCircle
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -87,6 +88,9 @@ export const AppLayout = ({ children, hideNav = false }: AppLayoutProps) => {
             <NotificationBell />
             <Button variant="ghost" size="icon" onClick={toggleTheme}>
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/profile')}>
+              <UserCircle className="h-5 w-5" />
             </Button>
             <Button variant="outline" size="sm" onClick={signOut}>
               <LogOut className="h-4 w-4 sm:mr-2" />
