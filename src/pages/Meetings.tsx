@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Calendar, Clock, Users, FileText, ChevronRight, Copy, UserCheck } from 'lucide-react';
+import { Loader2, Plus, Calendar, Clock, Users, FileText, ChevronRight, Copy, UserCheck, Video } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Meeting {
@@ -248,6 +248,12 @@ const Meetings = () => {
   const copyMeetingId = (id: string) => {
     navigator.clipboard.writeText(id);
     toast({ title: 'Copied', description: 'Meeting ID copied to clipboard' });
+  };
+
+  const openVideoCall = (meetingId: string) => {
+    const room = `taskflow-${meetingId}`;
+    const url = `https://meet.jit.si/${encodeURIComponent(room)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const isPastMeeting = (date: string) => new Date(date) < new Date();
@@ -521,11 +527,23 @@ const Meetings = () => {
                             </Button>
                           </div>
                         </div>
-                        {isPastMeeting(selectedMeeting.meeting_date) ? (
-                          <Badge variant="secondary">Past</Badge>
-                        ) : (
-                          <Badge variant="default">Upcoming</Badge>
-                        )}
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openVideoCall(selectedMeeting.id)}
+                          >
+                            <Video className="h-4 w-4 mr-2" />
+                            Video Call
+                          </Button>
+
+                          {isPastMeeting(selectedMeeting.meeting_date) ? (
+                            <Badge variant="secondary">Past</Badge>
+                          ) : (
+                            <Badge variant="default">Upcoming</Badge>
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">

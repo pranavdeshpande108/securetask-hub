@@ -24,7 +24,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (event: any, session) => {
+        // If refresh fails (corrupt/expired refresh token), force a clean sign-out
+        if (event === 'TOKEN_REFRESH_FAILED') {
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          toast({
+            title: 'Session expired',
+            description: 'Please sign in again.',
+            variant: 'destructive',
+          });
+
+          // Defer supabase call to avoid auth callback deadlocks
+          setTimeout(() => {
+            supabase.auth.signOut();
+          }, 0);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -32,14 +50,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
-    });
+
+      // If a stored session exists, verify it can be refreshed; otherwise clear it.
+      if (session) {
+        const { error } = await supabase.auth.refreshSession();
+        if (error) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          toast({
+            title: 'Session expired',
+            description: 'Please sign in again.',
+            variant: 'destructive',
+          });
+        }
+      }
+    })();
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [toast]);
 
   const signUp = async (email: string, password: string, fullName: string, role: 'user' | 'admin') => {
     try {
