@@ -520,14 +520,32 @@ export const useChat = () => {
   // Add reaction to message
   const addReaction = async (messageId: string, reaction: string) => {
     if (!user) return;
-    
-    try {
-      // The realtime subscription will handle the UI update
-      const { error } = await supabase
-        .from('message_reactions')
-        .insert({ message_id: messageId, user_id: user.id, reaction });
 
-      if (error && error.code !== '23505') throw error; // Ignore duplicate error
+    try {
+      const { data, error } = await supabase
+        .from('message_reactions')
+        .insert({ message_id: messageId, user_id: user.id, reaction })
+        .select('*')
+        .single();
+
+      // Ignore duplicate error (already reacted)
+      if (error) {
+        const code = (error as any)?.code;
+        if (code === '23505') return;
+        throw error;
+      }
+
+      if (data) {
+        setMessages(prevMessages =>
+          prevMessages.map(msg => {
+            if (msg.id !== messageId) return msg;
+            const existing = (msg.reactions || []).some(r => r.id === data.id);
+            return existing
+              ? msg
+              : { ...msg, reactions: [...(msg.reactions || []), data] };
+          })
+        );
+      }
     } catch (error) {
       console.error('Error adding reaction:', error);
       toast({ title: 'Error', description: 'Failed to add reaction.', variant: 'destructive' });
