@@ -71,7 +71,7 @@ const Meetings = () => {
     meeting_time: '',
     duration_minutes: 60,
     participants: [] as string[],
-    mom_taker: '',
+    mom_taker: 'none',
   });
 
   useEffect(() => {
@@ -83,20 +83,48 @@ const Meetings = () => {
     if (!user) return;
     setLoading(true);
     try {
+      // Collect meeting IDs the user can access (creator or participant). This avoids RLS-select errors.
+      const [{ data: participantRows, error: participantErr }, { data: creatorRows, error: creatorErr }] = await Promise.all([
+        supabase
+          .from('meeting_participants')
+          .select('meeting_id')
+          .eq('user_id', user.id),
+        supabase
+          .from('meetings')
+          .select('id')
+          .eq('created_by', user.id),
+      ]);
+
+      if (participantErr) throw participantErr;
+      if (creatorErr) throw creatorErr;
+
+      const accessibleIds = new Set<string>();
+      (participantRows || []).forEach((row: any) => accessibleIds.add(row.meeting_id));
+      (creatorRows || []).forEach((row: any) => accessibleIds.add(row.id));
+
+      if (accessibleIds.size === 0) {
+        setMeetings([]);
+        setSelectedMeeting(null);
+        setLoading(false);
+        return;
+      }
+
+      const meetingIds = Array.from(accessibleIds);
+
       const { data: meetingsData, error: meetingsError } = await supabase
         .from('meetings')
         .select('*')
+        .in('id', meetingIds)
         .order('meeting_date', { ascending: false });
 
       if (meetingsError) throw meetingsError;
 
       if (!meetingsData || meetingsData.length === 0) {
         setMeetings([]);
+        setSelectedMeeting(null);
         setLoading(false);
         return;
       }
-
-      const meetingIds = meetingsData.map((m) => m.id);
 
       const { data: participantsData, error: participantsError } = await supabase
         .from('meeting_participants')
@@ -131,6 +159,14 @@ const Meetings = () => {
       }));
 
       setMeetings(formattedMeetings);
+
+      // Keep selection in sync: if previously selected is gone, reset; else pick newest if none.
+      if (formattedMeetings.length > 0) {
+        const stillExists = formattedMeetings.find(m => m.id === selectedMeeting?.id);
+        setSelectedMeeting(stillExists || formattedMeetings[0]);
+      } else {
+        setSelectedMeeting(null);
+      }
     } catch (error) {
       console.error('Error fetching meetings:', error);
       toast({ title: 'Error', description: 'Failed to load meetings', variant: 'destructive' });
@@ -175,6 +211,7 @@ const Meetings = () => {
           meeting_date: meetingDateTime.toISOString(),
           duration_minutes: newMeeting.duration_minutes,
           created_by: user.id,
+          mom_taker: newMeeting.mom_taker === 'none' ? null : newMeeting.mom_taker,
         })
         .select()
         .single();
@@ -209,9 +246,13 @@ const Meetings = () => {
         meeting_time: '',
         duration_minutes: 60,
         participants: [],
-        mom_taker: '',
+        mom_taker: 'none',
       });
-      fetchMeetings();
+      // Immediately reflect new meeting and select it
+      if (meeting) {
+        await fetchMeetings();
+        setSelectedMeeting(meeting);
+      }
     } catch (error) {
       console.error('Error creating meeting:', error);
       toast({ title: 'Error', description: 'Failed to create meeting', variant: 'destructive' });
@@ -390,7 +431,7 @@ const Meetings = () => {
                       <SelectValue placeholder="Select person to take notes" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No one assigned</SelectItem>
+                      <SelectItem value="none">No one assigned</SelectItem>
                       {[...newMeeting.participants, user?.id].filter(Boolean).map((userId) => {
                         const profile = profiles.find(p => p.id === userId);
                         if (!profile) return null;

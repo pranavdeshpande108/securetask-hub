@@ -17,10 +17,12 @@ export interface ChatMessage {
   sender?: {
     full_name: string | null;
     email: string;
+    avatar_url?: string | null;
   };
   receiver?: {
     full_name: string | null;
     email: string;
+    avatar_url?: string | null;
   };
   reactions?: MessageReaction[];
 }
@@ -37,6 +39,7 @@ interface ChatUser {
   id: string;
   email: string;
   full_name: string | null;
+  avatar_url?: string | null;
   unread_count: number;
   is_online?: boolean;
   last_seen?: string;
@@ -199,7 +202,7 @@ export const useChat = () => {
     try {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, email, full_name')
+        .select('id, email, full_name, avatar_url')
         .neq('id', user.id);
 
       if (profilesError) throw profilesError;
@@ -273,8 +276,8 @@ export const useChat = () => {
         .from('chat_messages')
         .select(`
           *,
-          sender:profiles!chat_messages_sender_id_fkey(full_name, email),
-          receiver:profiles!chat_messages_receiver_id_fkey(full_name, email)
+          sender:profiles!chat_messages_sender_id_fkey(full_name, email, avatar_url),
+          receiver:profiles!chat_messages_receiver_id_fkey(full_name, email, avatar_url)
         `)
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${selectedUser}),and(sender_id.eq.${selectedUser},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: true });

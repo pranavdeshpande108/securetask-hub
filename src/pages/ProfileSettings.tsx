@@ -102,13 +102,13 @@ const ProfileSettings = () => {
       const fileName = `${user.id}/avatar.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('chat-attachments')
+        .from('profile-avatars')
         .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('chat-attachments')
+        .from('profile-avatars')
         .getPublicUrl(fileName);
 
       // Update profile with new avatar URL

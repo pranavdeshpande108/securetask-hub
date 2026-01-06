@@ -72,7 +72,7 @@ import {
   ExternalLink,
   Home
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
@@ -229,6 +229,44 @@ const Chat = () => {
       toast({ title: 'Download failed', description: 'Could not download file' });
     }
   };
+
+  // Search filter for messages (used by in-chat search)
+  const filteredMessages = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter((msg) => {
+      const textHit = msg.message?.toLowerCase().includes(q);
+      const fileHit = msg.file_name?.toLowerCase().includes(q);
+      return textHit || fileHit;
+    });
+  }, [messages, searchQuery]);
+
+  // Group messages into day sections (Today / Yesterday / older dates)
+  const groupedMessages = useMemo(() => {
+    const groups: { label: string; dateKey: string; items: ChatMessage[] }[] = [];
+    const byDay: Record<string, ChatMessage[]> = {};
+
+    filteredMessages.forEach((msg) => {
+      const dateKey = format(new Date(msg.created_at), 'yyyy-MM-dd');
+      if (!byDay[dateKey]) byDay[dateKey] = [];
+      byDay[dateKey].push(msg);
+    });
+
+    Object.keys(byDay)
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+      .forEach((dateKey) => {
+        const dateObj = new Date(dateKey);
+        const label = isToday(dateObj)
+          ? 'Today'
+          : isYesterday(dateObj)
+            ? 'Yesterday'
+            : format(dateObj, 'MMM d, yyyy');
+
+        groups.push({ label, dateKey, items: byDay[dateKey] });
+      });
+
+    return groups;
+  }, [filteredMessages]);
 
   // Extract shared media, links, and docs from messages
   const sharedContent = useMemo(() => {
@@ -523,6 +561,7 @@ const Chat = () => {
               >
                 <div className="relative shrink-0">
                   <Avatar className="h-10 w-10">
+                    <AvatarImage src={chatUser.avatar_url || undefined} />
                     <AvatarFallback className={`${
                       selectedUser === chatUser.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                     }`}>
@@ -579,6 +618,7 @@ const Chat = () => {
               <button className="flex items-center gap-3 flex-1 min-w-0" onClick={() => setMobileView('info')}>
                 <div className="relative">
                   <Avatar className="h-10 w-10">
+                    <AvatarImage src={selectedUserData?.avatar_url || undefined} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
                         {selectedUserData && getInitials(selectedUserData.full_name, selectedUserData.email)}
                     </AvatarFallback>
@@ -681,146 +721,159 @@ const Chat = () => {
              <div className="h-full flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
              </div>
-          ) : messages.length === 0 ? (
+          ) : filteredMessages.length === 0 ? (
              <div className="h-full flex items-center justify-center text-muted-foreground">
                 <p>No messages yet</p>
              </div>
           ) : (
              <div className="space-y-6">
-               <div className="flex justify-center">
-                 <span className="bg-muted text-muted-foreground text-xs px-3 py-1 rounded-full">Today</span>
-               </div>
-               
-               {messages.map((msg) => {
-                 const isOwn = msg.sender_id === user?.id;
-                 return (
-                   <div key={msg.id} className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : 'flex-row'} group`}>
-                      {/* Avatar */}
-                      <Avatar className="h-8 w-8 mt-1 shrink-0">
-                        <AvatarFallback className={isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}>
-                          {isOwn ? getInitials(null, user?.email || '') : getInitials(selectedUserData?.full_name || null, selectedUserData?.email || '')}
-                        </AvatarFallback>
-                      </Avatar>
-
-                      {/* Message Bubble Container */}
-                      <div className={`max-w-[85%] md:max-w-[70%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
-                         <div className={`relative px-4 py-3 text-sm shadow-sm ${
-                           isOwn 
-                             ? 'bg-primary text-primary-foreground rounded-[12px] rounded-tr-none' 
-                             : 'bg-muted text-foreground rounded-[12px] rounded-tl-none'
-                         }`}>
-                           
-                           {/* Attachments */}
-                           {msg.file_url && (
-                            <div className={`${isImageFile(msg.file_type) ? '-mx-4 -mt-3 mb-2' : 'mb-2'}`}>
-                              {isImageFile(msg.file_type) ? (
-                                <button
-                                  type="button"
-                                  onClick={() => openImage(msg.file_url!)}
-                                  className={`block w-full overflow-hidden ${isOwn ? 'rounded-t-[12px] rounded-tr-none' : 'rounded-t-[12px] rounded-tl-none'}`}
-                                >
-                                  <img
-                                    src={msg.file_url}
-                                    alt="attachment"
-                                    className="w-full max-h-[300px] object-cover hover:opacity-95 transition-opacity"
-                                    onContextMenu={(e) => e.preventDefault()}
-                                    draggable={false}
-                                  />
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => openFile(msg.file_url!, msg.file_name, msg.file_type)}
-                                  onContextMenu={(e) => e.preventDefault()}
-                                  className={`flex items-center gap-2 p-2 rounded-lg w-full ${
-                                    isOwn ? 'bg-primary-foreground/10' : 'bg-card'
-                                  }`}
-                                >
-                                  <FileIcon className="h-4 w-4 shrink-0" />
-                                  <span className="truncate text-sm flex-1 text-left">{msg.file_name || 'File'}</span>
-                                  <Download className="h-4 w-4 shrink-0 opacity-60" />
-                                </button>
-                              )}
-                            </div>
-                           )}
-
-                           {/* Message Text */}
-                           {msg.message && !msg.message.startsWith('Sent a file:') && (
-                              <p className="whitespace-pre-wrap leading-relaxed">{msg.message}</p>
-                           )}
-
-                           {/* Actions on Hover */}
-                           <div className={`absolute -top-5 ${isOwn ? 'right-0' : 'left-0'} z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
-                              <div className="flex items-center gap-1 bg-card border rounded-full shadow-lg p-1">
-                                {REACTIONS.map(r => (
-                                  <button 
-                                    key={r} 
-                                    onClick={() => handleReaction(msg.id, r)} 
-                                    className="text-lg p-1 rounded-full hover:scale-125 hover:bg-muted transition-transform"
-                                    aria-label={`React with ${r}`}
-                                  >
-                                    {r}
-                                  </button>
-                                ))}
-                                <div className="w-px h-5 bg-border mx-1"></div>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
-                                    <DropdownMenuItem onClick={() => handleOpenForwardDialog(msg)}>
-                                      <Share2 className="h-3 w-3 mr-2" /> Forward
-                                    </DropdownMenuItem>
-                                    {msg.message && (
-                                      <DropdownMenuItem onClick={() => {
-                                        navigator.clipboard.writeText(msg.message);
-                                        toast({ title: "Copied!" });
-                                      }}>
-                                        <Copy className="h-3 w-3 mr-2" /> Copy Text
-                                      </DropdownMenuItem>
-                                    )}
-                                    
-                                    {isOwn && (
-                                      <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={() => deleteMessage(msg.id)} className="text-destructive">
-                                          <Trash2 className="h-3 w-3 mr-2" /> Delete
-                                        </DropdownMenuItem>
-                                      </>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                           </div>
-
-                         </div>
-                         
-                         {/* Timestamp */}
-                         <span className="text-[11px] text-muted-foreground mt-1 px-1 flex items-center gap-1">
-                           {format(new Date(msg.created_at), 'hh:mm a')}
-                           {isOwn && (
-                              <span className="inline-flex">
-                                {msg.is_read ? <CheckCheck className="h-3 w-3 text-primary" /> : <Check className="h-3 w-3" />}
-                              </span>
-                           )}
-                         </span>
-
-                         {/* Reactions */}
-                         {msg.reactions && msg.reactions.length > 0 && (
-                           <div className="flex gap-1 mt-1">
-                             {Array.from(new Set(msg.reactions.map(r => r.reaction))).map(emoji => (
-                               <Badge key={emoji} variant="secondary" className="text-[10px] px-1 h-5 bg-card border border-border">
-                                 {emoji} {msg.reactions?.filter(r => r.reaction === emoji).length}
-                               </Badge>
-                             ))}
-                           </div>
-                         )}
-                      </div>
+               {groupedMessages.map((group) => (
+                 <div key={group.dateKey} className="space-y-4">
+                   <div className="flex justify-center">
+                     <span className="bg-muted text-muted-foreground text-xs px-3 py-1 rounded-full">{group.label}</span>
                    </div>
-                 );
-               })}
+
+                   {group.items.map((msg) => {
+                     const isOwn = msg.sender_id === user?.id;
+                     return (
+                       <div key={msg.id} className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : 'flex-row'} group`}>
+                          {/* Avatar */}
+                          <Avatar className="h-8 w-8 mt-1 shrink-0">
+                            <AvatarImage src={isOwn ? undefined : selectedUserData?.avatar_url || undefined} />
+                            <AvatarFallback className={isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}>
+                              {isOwn ? getInitials(null, user?.email || '') : getInitials(selectedUserData?.full_name || null, selectedUserData?.email || '')}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          {/* Message Bubble Container */}
+                          <div className={`max-w-[85%] md:max-w-[70%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
+                             <div className={`relative px-4 py-3 text-sm shadow-sm ${
+                               isOwn 
+                                 ? 'bg-primary text-primary-foreground rounded-[12px] rounded-tr-none' 
+                                 : 'bg-muted text-foreground rounded-[12px] rounded-tl-none'
+                             }`}>
+                               
+                               {/* Attachments */}
+                               {msg.file_url && (
+                                <div className={`${isImageFile(msg.file_type) ? '-mx-4 -mt-3 mb-2' : 'mb-2'}`}>
+                                  {isImageFile(msg.file_type) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openImage(msg.file_url!)}
+                                      className={`block w-full overflow-hidden ${isOwn ? 'rounded-t-[12px] rounded-tr-none' : 'rounded-t-[12px] rounded-tl-none'}`}
+                                    >
+                                      <img
+                                        src={msg.file_url}
+                                        alt="attachment"
+                                        className="w-full max-h-[300px] object-cover hover:opacity-95 transition-opacity"
+                                        onContextMenu={(e) => e.preventDefault()}
+                                        draggable={false}
+                                      />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => openFile(msg.file_url!, msg.file_name, msg.file_type)}
+                                      onContextMenu={(e) => e.preventDefault()}
+                                      className={`flex items-center gap-2 p-2 rounded-lg w-full ${
+                                        isOwn ? 'bg-primary-foreground/10' : 'bg-card'
+                                      }`}
+                                    >
+                                      <FileIcon className="h-4 w-4 shrink-0" />
+                                      <span className="truncate text-sm flex-1 text-left">{msg.file_name || 'File'}</span>
+                                      <Download className="h-4 w-4 shrink-0 opacity-60" />
+                                    </button>
+                                  )}
+                                </div>
+                               )}
+
+                               {/* Message Text */}
+                               {msg.message && !msg.message.startsWith('Sent a file:') && (
+                                  <p className="whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                               )}
+
+                               {/* Actions on Hover */}
+                               <div className={`absolute -top-5 ${isOwn ? 'right-0' : 'left-0'} z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                                  <div className="flex items-center gap-1 bg-card border rounded-full shadow-lg p-1">
+                                    {REACTIONS.map(r => (
+                                      <button 
+                                        key={r} 
+                                        onClick={() => handleReaction(msg.id, r)} 
+                                        className="text-lg p-1 rounded-full hover:scale-125 hover:bg-muted transition-transform"
+                                        aria-label={`React with ${r}`}
+                                      >
+                                        {r}
+                                      </button>
+                                    ))}
+                                    <div className="w-px h-5 bg-border mx-1"></div>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full">
+                                          <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
+                                        <DropdownMenuItem onClick={() => handleOpenForwardDialog(msg)}>
+                                          <Share2 className="h-3 w-3 mr-2" /> Forward
+                                        </DropdownMenuItem>
+                                        {msg.message && (
+                                          <DropdownMenuItem onClick={() => {
+                                            navigator.clipboard.writeText(msg.message);
+                                            toast({ title: "Copied!" });
+                                          }}>
+                                            <Copy className="h-3 w-3 mr-2" /> Copy Text
+                                          </DropdownMenuItem>
+                                        )}
+                                        
+                                        {isOwn && (
+                                          <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => deleteMessage(msg.id)} className="text-destructive">
+                                              <Trash2 className="h-3 w-3 mr-2" /> Delete
+                                            </DropdownMenuItem>
+                                          </>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                               </div>
+
+                             </div>
+                             
+                             {/* Timestamp */}
+                             <span className="text-[11px] text-muted-foreground mt-1 px-1 flex items-center gap-1">
+                               {format(new Date(msg.created_at), 'hh:mm a')}
+                               {isOwn && (
+                                  <span className="inline-flex">
+                                    {msg.is_read ? <CheckCheck className="h-3 w-3 text-primary" /> : <Check className="h-3 w-3" />}
+                                  </span>
+                               )}
+                             </span>
+
+                             {/* Reactions */}
+                             {msg.reactions && msg.reactions.length > 0 && (
+                               <div className="flex gap-1 mt-1">
+                                 {Array.from(new Set(msg.reactions.map(r => r.reaction))).map(emoji => {
+                                   const userReacted = msg.reactions?.some(r => r.reaction === emoji && r.user_id === user?.id);
+                                   return (
+                                     <Badge
+                                       key={emoji}
+                                       variant="secondary"
+                                       onClick={() => handleReaction(msg.id, emoji)}
+                                       className={`text-[10px] px-1 h-5 bg-card border border-border cursor-pointer select-none transition ${userReacted ? 'ring-1 ring-primary/60' : ''}`}
+                                     >
+                                       {emoji} {msg.reactions?.filter(r => r.reaction === emoji).length}
+                                     </Badge>
+                                   );
+                                 })}
+                               </div>
+                             )}
+                          </div>
+                       </div>
+                     );
+                   })}
+                 </div>
+               ))}
                <div ref={messagesEndRef} />
              </div>
           )}
