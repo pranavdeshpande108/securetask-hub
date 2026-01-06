@@ -193,6 +193,7 @@ export type Database = {
           duration_minutes: number | null
           id: string
           meeting_date: string
+          mom_taker: string | null
           title: string
           updated_at: string
         }
@@ -203,6 +204,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           meeting_date: string
+          mom_taker?: string | null
           title: string
           updated_at?: string
         }
@@ -213,6 +215,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           meeting_date?: string
+          mom_taker?: string | null
           title?: string
           updated_at?: string
         }
@@ -321,6 +324,7 @@ export type Database = {
           full_name: string | null
           id: string
           phone_number: string | null
+          status: string | null
           updated_at: string
           visibility: string | null
         }
@@ -331,6 +335,7 @@ export type Database = {
           full_name?: string | null
           id: string
           phone_number?: string | null
+          status?: string | null
           updated_at?: string
           visibility?: string | null
         }
@@ -341,6 +346,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone_number?: string | null
+          status?: string | null
           updated_at?: string
           visibility?: string | null
         }
