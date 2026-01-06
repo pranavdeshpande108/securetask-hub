@@ -40,6 +40,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Listen for profile deletion (admin deleted user) - auto logout
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('profile-deletion')
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        () => {
+          // Profile was deleted by admin - sign out
+          toast.error('Your account has been deleted by an administrator.');
+          supabase.auth.signOut();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const signUp = useCallback(async (email: string, password: string, fullName: string, role: 'user' | 'admin') => {
     try {
       const redirectUrl = `${window.location.origin}/`;

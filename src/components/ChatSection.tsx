@@ -14,7 +14,7 @@ import { ImagePreviewModal } from "./ImagePreviewModal";
 import { useAuth } from '@/contexts/AuthContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MessageSquare, Send, ArrowLeft, Users, ExternalLink, Paperclip, X, FileIcon, Image as ImageIcon, Loader2, Copy, Trash2, Share2, MoreHorizontal, Smile, Download } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, startOfDay } from 'date-fns';
 
 export const ChatSection = () => {
   const navigate = useNavigate();
@@ -306,31 +306,54 @@ export const ChatSection = () => {
                     <p className="text-xs">Start the conversation!</p>
                   </div>
                 ) : (
-                  messages.map((msg) => {
-                    const isOwn = msg.sender_id === user?.id;
-
-                    const handleReaction = (messageId: string, reaction: string) => {
-                      const existingReaction = messages
-                        .find(m => m.id === messageId)
-                        ?.reactions?.find(r => r.user_id === user?.id && r.reaction === reaction);
-
-                      if (existingReaction) {
-                        removeReaction(existingReaction.id);
-                      } else {
-                        addReaction(messageId, reaction);
-                      }
+                  (() => {
+                    // Group messages by date
+                    const getDateLabel = (dateStr: string) => {
+                      const date = new Date(dateStr);
+                      if (isToday(date)) return 'Today';
+                      if (isYesterday(date)) return 'Yesterday';
+                      return format(date, 'EEEE, MMMM d, yyyy');
                     };
-                    
-                    const reactionsSummary = (msg.reactions || []).reduce((acc, r) => {
-                      acc[r.reaction] = (acc[r.reaction] || 0) + 1;
-                      return acc;
-                    }, {} as Record<string, number>);
 
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`group flex w-full ${isOwn ? 'justify-end' : 'justify-start'}`}
-                      >
+                    let lastDateLabel = '';
+
+                    return messages.map((msg) => {
+                      const isOwn = msg.sender_id === user?.id;
+                      const currentDateLabel = getDateLabel(msg.created_at);
+                      const showDateDivider = currentDateLabel !== lastDateLabel;
+                      lastDateLabel = currentDateLabel;
+
+                      const handleReaction = (messageId: string, reaction: string) => {
+                        const existingReaction = messages
+                          .find(m => m.id === messageId)
+                          ?.reactions?.find(r => r.user_id === user?.id && r.reaction === reaction);
+
+                        if (existingReaction) {
+                          removeReaction(existingReaction.id);
+                        } else {
+                          addReaction(messageId, reaction);
+                        }
+                      };
+
+                      const reactionsSummary = (msg.reactions || []).reduce((acc, r) => {
+                        acc[r.reaction] = (acc[r.reaction] || 0) + 1;
+                        return acc;
+                      }, {} as Record<string, number>);
+
+                      return (
+                        <div key={msg.id}>
+                          {showDateDivider && (
+                            <div className="flex items-center justify-center my-4">
+                              <div className="flex-1 border-t border-border" />
+                              <span className="px-3 text-xs font-medium text-muted-foreground bg-card">
+                                {currentDateLabel}
+                              </span>
+                              <div className="flex-1 border-t border-border" />
+                            </div>
+                          )}
+                          <div
+                            className={`group flex w-full ${isOwn ? 'justify-end' : 'justify-start'}`}
+                          >
                         <div className="flex items-end gap-2 max-w-[85%]">
                           {!isOwn && (
                              <Avatar className="h-8 w-8">
@@ -470,9 +493,11 @@ export const ChatSection = () => {
                           </div>
                         </div>
                       </div>
-                    );
-                  })
-                )}
+                    </div>
+                  );
+                });
+              })()
+            )}
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
