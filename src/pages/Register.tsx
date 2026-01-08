@@ -26,7 +26,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 const Register = () => {
   const navigate = useNavigate();
-  const { signUp, signInWithGoogle, user } = useAuth();
+  const { signUp, signInWithGoogle, sendEmailOtp, verifyEmailOtp, sendPhoneOtp, verifyPhoneOtp, user } = useAuth();
   const { toast } = useToast();
   const [formData, setFormData] = useState<RegisterForm>({
     fullName: '',
@@ -38,6 +38,13 @@ const Register = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof RegisterForm, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [useOtp, setUseOtp] = useState(false);
+  const [otpMethod, setOtpMethod] = useState<'email' | 'phone'>('email');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -141,15 +148,26 @@ const Register = () => {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => signInWithGoogle()}
-              disabled={isLoading}
-            >
-              Continue with Google
-            </Button>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => signInWithGoogle('user')}
+                disabled={isLoading}
+              >
+                Continue with Google (User)
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => signInWithGoogle('admin', adminPassword)}
+                disabled={isLoading}
+              >
+                Continue with Google (Admin)
+              </Button>
+            </div>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -160,70 +178,229 @@ const Register = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input
-                id="fullName"
-                name="fullName"
-                type="text"
-                placeholder="John Doe"
-                value={formData.fullName}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={errors.fullName ? 'border-destructive' : ''}
-              />
-              {errors.fullName && (
-                <p className="text-sm text-destructive">{errors.fullName}</p>
-              )}
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Use OTP registration</Label>
+              <button
+                type="button"
+                className="text-sm text-primary hover:underline"
+                onClick={() => {
+                  setUseOtp((prev) => !prev);
+                  setOtpSent(false);
+                  setOtpCode('');
+                }}
+              >
+                {useOtp ? 'Use email/password' : 'Use OTP'}
+              </button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="john@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={errors.email ? 'border-destructive' : ''}
-              />
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={errors.password ? 'border-destructive' : ''}
-              />
-              {errors.password && (
-                <p className="text-sm text-destructive">{errors.password}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={errors.confirmPassword ? 'border-destructive' : ''}
-              />
-              {errors.confirmPassword && (
-                <p className="text-sm text-destructive">{errors.confirmPassword}</p>
-              )}
-            </div>
+
+            {!useOtp && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    name="fullName"
+                    type="text"
+                    placeholder="John Doe"
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    className={errors.fullName ? 'border-destructive' : ''}
+                  />
+                  {errors.fullName && (
+                    <p className="text-sm text-destructive">{errors.fullName}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="john@example.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    className={errors.email ? 'border-destructive' : ''}
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-destructive">{errors.email}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    className={errors.password ? 'border-destructive' : ''}
+                  />
+                  {errors.password && (
+                    <p className="text-sm text-destructive">{errors.password}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    className={errors.confirmPassword ? 'border-destructive' : ''}
+                  />
+                  {errors.confirmPassword && (
+                    <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {useOtp && (
+              <>
+                <div className="space-y-2">
+                  <Label>OTP Method</Label>
+                  <div className="flex gap-2">
+                    <Button type="button" variant={otpMethod === 'email' ? 'default' : 'outline'} onClick={() => setOtpMethod('email')} disabled={otpLoading}>
+                      Email
+                    </Button>
+                    <Button type="button" variant={otpMethod === 'phone' ? 'default' : 'outline'} onClick={() => setOtpMethod('phone')} disabled={otpLoading}>
+                      Phone
+                    </Button>
+                  </div>
+                </div>
+
+                {otpMethod === 'email' ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="otpEmail">Email</Label>
+                    <Input
+                      id="otpEmail"
+                      type="email"
+                      placeholder="john@example.com"
+                      value={otpEmail}
+                      onChange={(e) => setOtpEmail(e.target.value)}
+                      disabled={otpLoading}
+                    />
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={otpLoading || !otpEmail || (formData.role === 'admin' && !adminPassword)}
+                      onClick={async () => {
+                        if (formData.role === 'admin') {
+                          try {
+                            const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-admin', {
+                              body: { password: adminPassword }
+                            });
+                            if (verifyError || !verifyData?.valid) {
+                              toast({ title: 'Invalid Admin Password', description: 'The admin password you entered is incorrect', variant: 'destructive' });
+                              return;
+                            }
+                          } catch (error) {
+                            toast({ title: 'Error', description: 'Failed to verify admin password', variant: 'destructive' });
+                            return;
+                          }
+                        }
+                        setOtpLoading(true);
+                        const { error } = await sendEmailOtp(otpEmail);
+                        setOtpSent(!error);
+                        setOtpLoading(false);
+                      }}
+                    >
+                      {otpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Send Email OTP
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="otpPhone">Phone (India supported)</Label>
+                    <Input
+                      id="otpPhone"
+                      type="tel"
+                      placeholder="10-digit or +91XXXXXXXXXX"
+                      value={otpPhone}
+                      onChange={(e) => setOtpPhone(e.target.value)}
+                      disabled={otpLoading}
+                    />
+                    <p className="text-xs text-muted-foreground">10-digit Indian numbers are auto-formatted to +91.</p>
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={otpLoading || !otpPhone || (formData.role === 'admin' && !adminPassword)}
+                      onClick={async () => {
+                        if (formData.role === 'admin') {
+                          try {
+                            const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-admin', {
+                              body: { password: adminPassword }
+                            });
+                            if (verifyError || !verifyData?.valid) {
+                              toast({ title: 'Invalid Admin Password', description: 'The admin password you entered is incorrect', variant: 'destructive' });
+                              return;
+                            }
+                          } catch (error) {
+                            toast({ title: 'Error', description: 'Failed to verify admin password', variant: 'destructive' });
+                            return;
+                          }
+                        }
+                        setOtpLoading(true);
+                        const { error } = await sendPhoneOtp(otpPhone);
+                        setOtpSent(!error);
+                        setOtpLoading(false);
+                      }}
+                    >
+                      {otpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Send SMS OTP
+                    </Button>
+                  </div>
+                )}
+
+                {otpSent && (
+                  <div className="space-y-2">
+                    <Label htmlFor="otpCode">Enter 6-digit code</Label>
+                    <Input
+                      id="otpCode"
+                      type="text"
+                      placeholder="123456"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      disabled={otpLoading}
+                    />
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={otpLoading || otpCode.length === 0}
+                      onClick={async () => {
+                        setOtpLoading(true);
+                        const result = otpMethod === 'email'
+                          ? await verifyEmailOtp(otpEmail, otpCode)
+                          : await verifyPhoneOtp(otpPhone, otpCode);
+                        setOtpLoading(false);
+                        if (!result.error) {
+                          const { data: { session } } = await supabase.auth.getSession();
+                          const userId = session?.user?.id;
+                          if (userId) {
+                            await supabase.from('user_roles').upsert({ user_id: userId, role: formData.role });
+                            if (formData.fullName) {
+                              await supabase.from('profiles').upsert({ id: userId, full_name: formData.fullName });
+                            }
+                          }
+                          navigate('/dashboard');
+                        }
+                      }}
+                    >
+                      {otpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Verify & Create Account
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
               <Select 
@@ -277,10 +454,12 @@ const Register = () => {
             )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Register
-            </Button>
+            {!useOtp && (
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Register
+              </Button>
+            )}
             <p className="text-sm text-center text-muted-foreground">
               Already have an account?{' '}
               <Link to="/login" className="text-primary hover:underline">

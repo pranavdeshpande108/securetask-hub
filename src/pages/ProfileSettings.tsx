@@ -37,6 +37,9 @@ const ProfileSettings = () => {
 
   useEffect(() => {
     fetchProfile();
+    if (user?.email) {
+      setEmail(user.email);
+    }
   }, [user]);
 
   const fetchProfile = async () => {
